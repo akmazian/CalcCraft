@@ -110,7 +110,7 @@ export class TableEvaluator {
 
         // Remove grouping separators, replace decimal with dot for parseFloat
         const normalized = String(str)
-            .replace(new RegExp('\\' + grouping.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
+            .replace(new RegExp(grouping.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
             .replace(decimal, '.');
 
         return parseFloat(normalized);

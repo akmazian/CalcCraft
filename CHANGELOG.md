@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Grouping separator `.` was not stripped when parsing cell values (e.g. `1.234,5` with decimal separator `,` was read as `1.234` instead of `1234.5`)
 - Removed a leftover debug `console.log` that fired for every labelled column on each render
 
 ## [2.3.7] - 2026-02-16
