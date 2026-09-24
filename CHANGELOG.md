@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Scientific notation in a referenced cell (`1.8e5`, `2e-3 M`) was read as the number `1.8` with the unit `e5`, so formulas referencing it failed
+- Scientific notation typed into a formula (`=2*1.8e5`) was split up and `e5` treated as a cell reference; decimals in formulas are now kept whole
 - Grouping separator `.` was not stripped when parsing cell values (e.g. `1.234,5` with decimal separator `,` was read as `1.234` instead of `1234.5`)
 - Removed a leftover debug `console.log` that fired for every labelled column on each render
 

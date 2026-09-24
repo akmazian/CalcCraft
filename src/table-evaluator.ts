@@ -300,7 +300,8 @@ export class TableEvaluator {
             return { value: this.parseLocaleNumber(cellContent), unit: null };
         }
 
-        const unitMatch = cellContent.trim().match(/^(-?[\d,.\s]+)\s*([a-zA-Z]+.*)?$/);
+        // The exponent must follow a digit, so "1.8e5" is a number but "3 e5" stays a (bad) unit
+        const unitMatch = cellContent.trim().match(/^(-?[\d,.\s]*\d(?:[eE][+-]?\d+)?)\s*([a-zA-Z]+.*)?$/);
         if (unitMatch) {
             const [, numberPart, unitPart] = unitMatch;
             const value = this.parseLocaleNumber(numberPart);
@@ -629,7 +630,7 @@ export class TableEvaluator {
 
                 const matchformula = restformula.match(/^[a-zA-Z]{3,}\(/);
 
-                const matchNum = restformula.match(/^\d+/);
+                const matchNum = restformula.match(/^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/);
 
                 const matchRangeCol = restformula.match(/^[a-z]:[a-z]/); //column range
                 const matchRangeColMatrix = restformula.match(/^\[[a-z]:[a-z]\]/); //column range

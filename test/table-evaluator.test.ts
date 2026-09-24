@@ -9,8 +9,8 @@ import { TableEvaluator } from "../src/table-evaluator";
 const LOCALE = { decimalSeparator: ".", groupingSeparator: "," };
 
 // Markers for known bugs; removed once the bug is fixed
-const BUG1 = true; // scientific notation in a referenced cell is read as a unit
-const BUG2 = true; // a number typed into a formula is split; "e5" becomes a cell reference
+const BUG1 = false; // scientific notation in a referenced cell is read as a unit
+const BUG2 = false; // a number typed into a formula is split; "e5" becomes a cell reference
 const BUG3 = true; // spaces as thousands separators are silently dropped
 
 function run(grid: string[][], settings: any = LOCALE) {
@@ -131,6 +131,7 @@ describe("formula tokenization", () => {
 
 	test("=2*1.8e5 keeps the number whole, no cell reference", { todo: BUG2 ? "bug 2" : undefined }, () => {
 		const { ev } = run(grid);
+		ev.parents[1][4] = [];
 		assert.equal(ev.parsefunction("2*1.8e5", [1, 4]), "2*1.8e5");
 		assert.deepEqual(ev.parents[1][4], []);
 	});
