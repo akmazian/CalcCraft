@@ -108,8 +108,10 @@ export class TableEvaluator {
         const decimal = this.settings.decimalSeparator || ".";
         const grouping = this.settings.groupingSeparator || ",";
 
-        // Remove grouping separators, replace decimal with dot for parseFloat
+        // Remove grouping separators (and spaces between digits, e.g. "1 000"),
+        // replace decimal with dot for parseFloat
         const normalized = String(str)
+            .replace(/(\d)\s+(?=\d)/g, "$1")
             .replace(new RegExp(grouping.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
             .replace(decimal, '.');
 

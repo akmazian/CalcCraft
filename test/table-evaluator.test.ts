@@ -11,7 +11,7 @@ const LOCALE = { decimalSeparator: ".", groupingSeparator: "," };
 // Markers for known bugs; removed once the bug is fixed
 const BUG1 = false; // scientific notation in a referenced cell is read as a unit
 const BUG2 = false; // a number typed into a formula is split; "e5" becomes a cell reference
-const BUG3 = true; // spaces as thousands separators are silently dropped
+const BUG3 = false; // spaces as thousands separators are silently dropped
 
 function run(grid: string[][], settings: any = LOCALE) {
 	const ev = new TableEvaluator();
@@ -322,6 +322,14 @@ describe("bug 3: spaces as thousands separators", () => {
 			assert.equal(written(cell), expected);
 		});
 	}
+
+	test("1 000 mL -> 1000 mL", () => {
+		assert.equal(written("1 000 mL"), "1000 mL");
+	});
+
+	test("1 000,5 with decimal ',' -> 1000.5", () => {
+		assert.equal(written("1 000,5", { decimalSeparator: ",", groupingSeparator: "." }), "1000.5");
+	});
 });
 
 describe("notebook fixtures evaluate without errors", () => {
