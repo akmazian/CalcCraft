@@ -5,7 +5,16 @@ All notable changes to CalcCraft will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## Fork of klaudyu/CalcCraft
+
+Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github.com/klaudyu/CalcCraft) 2.3.7 by akmazian, installed under the plugin ID `calc-craft-fork`. Everything below 2.3.7 is upstream history.
+
+## [2.3.7-fork.1] - 2026-09-24
+
+### Fork
+- Own plugin ID `calc-craft-fork` and name "CalcCraft (fork)"
+- Modification notices in changed source files, as required by Apache 2.0
+- Test suite: `npm test` (node:test + tsx)
 
 ### Changed
 - **References are uppercase**, as in Excel: `A1`, `B2:C4`, `A:F`, `[A1:C3]`. Lowercase `a1` is no longer a reference. The relative `c`/`r` notation (`2c1`, `+0c-1r`) is unchanged.

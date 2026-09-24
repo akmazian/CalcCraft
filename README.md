@@ -1,4 +1,16 @@
 
+## Fork of klaudyu/CalcCraft
+
+This is a fork of [klaudyu/CalcCraft](https://github.com/klaudyu/CalcCraft) 2.3.7, licensed under Apache 2.0 (see `LICENSE.txt`; `NOTICE` is math.js's).
+It installs as its own plugin, `calc-craft-fork` ("CalcCraft (fork)"), so Obsidian won't replace it with the upstream release when it checks for updates.
+
+Changes (see [CHANGELOG.md](CHANGELOG.md) for details):
+- Scientific notation works in cells (`1.8e5`, `2e-3 M`) and in formulas (`=2*1.8e5`)
+- Spaces between digits are ignored (`1 000` is 1000), and the `.` grouping separator is fixed
+- References are uppercase (`A1`, `B2:C4`), and row 1 is the first row after the header. **Existing formulas need updating**, e.g. `=c2*d2` becomes `=C1*D1`
+- Quoted quantities work in formulas: `="5 mL" * 3` gives `15 mL`
+- Test suite (`npm test`) and code cleanup
+
 ## Short Info
 
 <a href="https://youtu.be/6nSSLsIng8k?autoplay=1)">

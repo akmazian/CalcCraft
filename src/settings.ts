@@ -1,3 +1,8 @@
+// Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
+// (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
+// Changes: indentation and the matrix colour description only.
+// See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
+
 import { PluginSettingTab, Setting } from "obsidian";
 import { buyMeACoffee, paypal, revolut } from "./support";
 

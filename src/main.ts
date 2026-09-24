@@ -1,3 +1,9 @@
+// Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
+// (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
+// Changes: header-row detection, uppercase labels numbered from the first row
+// after the header, dead label code and debug logging removed.
+// See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
+
 import { Plugin, MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
 import { CalcCraftSettingsTab, DefaultSettings } from "./settings";
 import { TableEvaluator } from "./table-evaluator";

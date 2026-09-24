@@ -1,3 +1,10 @@
+// Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
+// (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
+// Changes: scientific notation in cells and formulas, whitespace digit grouping,
+// grouping-separator fix, uppercase references, rows numbered after the header,
+// quoted quantities (="5 mL" * 3), dead code removed.
+// See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
+
 import { create, all } from 'mathjs';
 
 const debug = false;
