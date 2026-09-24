@@ -1,6 +1,8 @@
 // Tests for TableEvaluator. Grids are arrays of rows of cell strings with the
 // header as the first row, exactly as main.ts builds them from the DOM.
 // Values are asserted by grid index: values[row][col], row 0 = header.
+// References use uppercase columns and number rows from the first row after
+// the header, so A1 is values[1][0].
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
@@ -44,10 +46,12 @@ function assertUnit(value: any, expected: number, unit: string) {
 
 // ---------------------------------------------------------------- fixtures
 
+// F1 is verbatim from the notebook except its formula, =c2*d2 there, which is
+// written =C1*D1 in the fork's reference style
 const F1 = `
 | Sample        | well format | # wells | # cells / well | # cells |
 | ------------- | ----------- | ------- | -------------- | ------- |
-| pFN214        | 12w         | 2       | 1.8e5          | =c2*d2  |
+| pFN214        | 12w         | 2       | 1.8e5          | =C1*D1  |
 | pFN223        | 12w         | 2       | 1.8e5          | 3.6e5   |
 | pFN228        | 12w         | 2       | 1.8e5          | 3.6e5   |
 | piggybac only | 12w         | 2       | 1.8e5          | 3.6e5   |
@@ -136,10 +140,10 @@ describe("formula tokenization", () => {
 		assert.deepEqual(ev.parents[1][4], []);
 	});
 
-	test("=c2*d2 references two cells", () => {
+	test("=C1*D1 references two cells", () => {
 		const { ev } = run(grid);
 		ev.parents[1][4] = [];
-		ev.parsefunction("c2*d2", [1, 4]);
+		ev.parsefunction("C1*D1", [1, 4]);
 		assert.deepEqual(ev.parents[1][4], [[1, 2], [1, 3]]);
 	});
 
@@ -147,7 +151,7 @@ describe("formula tokenization", () => {
 		const { ev } = run(grid);
 		ev.parents[1][4] = [];
 		ev.parsefunction("2c1*3", [1, 4]);
-		assert.deepEqual(ev.parents[1][4], [[0, 1]]);
+		assert.deepEqual(ev.parents[1][4], [[1, 1]]);
 	});
 
 	test("=1.5*2 is passed through as 1.5*2", () => {
@@ -157,7 +161,7 @@ describe("formula tokenization", () => {
 });
 
 describe("F1 cell counts", () => {
-	test("exactly as written: =c2*d2 gives 360000", { todo: BUG1 ? "bug 1" : undefined }, () => {
+	test("exactly as written: =C1*D1 gives 360000", { todo: BUG1 ? "bug 1" : undefined }, () => {
 		const { values, errors } = run(md(F1));
 		assert.equal(errors[1][4], null);
 		assert.equal(num(values[1][4]), 360000);
@@ -165,9 +169,9 @@ describe("F1 cell counts", () => {
 
 	const extended = (literal: boolean) => {
 		const grid = md(F1);
-		for (let r = 2; r <= 4; r++) grid[r][4] = literal ? "3.6e5" : `=c${r + 1}*d${r + 1}`;
-		grid[5][2] = "=sum(c2:c5)";
-		grid[5][4] = "=sum(e2:e5)";
+		for (let r = 2; r <= 4; r++) grid[r][4] = literal ? "3.6e5" : `=C${r}*D${r}`;
+		grid[5][2] = "=sum(C1:C4)";
+		grid[5][4] = "=sum(E1:E4)";
 		return run(grid);
 	};
 
@@ -191,7 +195,7 @@ describe("numbers typed into formulas", () => {
 	];
 	for (const [formula, expected, bug] of cases) {
 		test(`${formula} -> ${expected}`, { todo: bug ? "bug 2" : undefined }, () => {
-			// F1-shaped grid, so e5 exists and a mis-tokenized "e5" would not error out
+			// F1-shaped grid, so E5 exists and a mis-tokenized "e5" would not error out
 			const grid = md(F1);
 			grid[1][4] = formula;
 			const { values, errors } = run(grid);
@@ -208,20 +212,20 @@ describe("regression: behaviour that must not change", () => {
 	};
 
 	test("whole numbers", () => {
-		assert.equal(at([["a", "b", "c"], ["1", "2", "=a2+b2"]], 1, 2).value, 3);
+		assert.equal(at([["a", "b", "c"], ["1", "2", "=A1+B1"]], 1, 2).value, 3);
 	});
 
 	test("decimals", () => {
-		assert.equal(at([["a", "b", "c"], ["1.5", "2.25", "=a2*b2"]], 1, 2).value, 3.375);
+		assert.equal(at([["a", "b", "c"], ["1.5", "2.25", "=A1*B1"]], 1, 2).value, 3.375);
 	});
 
-	test("range a2:b4", () => {
-		const grid = [["a", "b", "c"], ["1", "2", ""], ["3", "4", ""], ["5", "6", "=sum(a2:b4)"]];
+	test("range A1:B3", () => {
+		const grid = [["a", "b", "c"], ["1", "2", ""], ["3", "4", ""], ["5", "6", "=sum(A1:B3)"]];
 		assert.equal(at(grid, 3, 2).value, 21);
 	});
 
-	test("2c3: column 2, row 3", () => {
-		const grid = [["a", "b", "c"], ["1", "2", ""], ["3", "4", "=2c3"]];
+	test("2c2: column 2, row 2", () => {
+		const grid = [["a", "b", "c"], ["1", "2", ""], ["3", "4", "=2c2"]];
 		assert.equal(at(grid, 2, 2).value, 4);
 	});
 
@@ -230,56 +234,56 @@ describe("regression: behaviour that must not change", () => {
 		assert.equal(at(grid, 2, 1).value, 7);
 	});
 
-	test("sum(+0c2:+0c-1r): column total above", () => {
-		const grid = [["a"], ["1"], ["2"], ["3"], ["=sum(+0c2:+0c-1r)"]];
+	test("sum(+0c1:+0c-1r): column total above", () => {
+		const grid = [["a"], ["1"], ["2"], ["3"], ["=sum(+0c1:+0c-1r)"]];
 		assert.equal(at(grid, 4, 0).value, 6);
 	});
 
-	test("whole-column range a:f skips the header", () => {
+	test("whole-column range A:F skips the header", () => {
 		const grid = [
 			["a", "b", "c", "d", "e", "f", "g"],
-			["1", "2", "3", "4", "5", "6", "=sum(a:f)"],
+			["1", "2", "3", "4", "5", "6", "=sum(A:F)"],
 			["1", "1", "1", "1", "1", "1", ""],
 		];
 		assert.equal(at(grid, 1, 6).value, 27);
 	});
 
-	test("row range 2:2", () => {
-		const grid = [["a", "b"], ["4", "5"], ["=sum(2:2)", ""]];
+	test("row range 1:1", () => {
+		const grid = [["a", "b"], ["4", "5"], ["=sum(1:1)", ""]];
 		assert.equal(at(grid, 2, 0).value, 9);
 	});
 
 	test("unit cell arithmetic: 500ng * 2", () => {
-		assertUnit(at([["a", "b"], ["500ng", "=a2*2"]], 1, 1).value, 1000, "ng");
+		assertUnit(at([["a", "b"], ["500ng", "=A1*2"]], 1, 1).value, 1000, "ng");
 	});
 
 	test("unit cell arithmetic: 714ng + 286ng", () => {
-		assertUnit(at([["a", "b", "c"], ["714ng", "286ng", "=a2+b2"]], 1, 2).value, 1000, "ng");
+		assertUnit(at([["a", "b", "c"], ["714ng", "286ng", "=A1+B1"]], 1, 2).value, 1000, "ng");
 	});
 
 	test("unit conversion between cells: 5 mL + 250 uL", () => {
-		assertUnit(at([["a", "b", "c"], ["5 mL", "250 uL", "=a2+b2"]], 1, 2).value, 5.25, "mL");
+		assertUnit(at([["a", "b", "c"], ["5 mL", "250 uL", "=A1+B1"]], 1, 2).value, 5.25, "mL");
 	});
 
 	test("sum() over unit cells with an empty cell", () => {
-		const grid = [["a"], ["1 cm"], ["3 cm"], [""], ["=sum(a2:a4)"]];
+		const grid = [["a"], ["1 cm"], ["3 cm"], [""], ["=sum(A1:A3)"]];
 		assertUnit(at(grid, 4, 0).value, 4, "cm");
 	});
 
 	test("matrix formula expands into cells below", () => {
-		const grid = [["a", "b"], ["5", "=[a2:a3]*2"], ["6", ""]];
+		const grid = [["a", "b"], ["5", "=[A1:A2]*2"], ["6", ""]];
 		const { values } = run(grid);
 		assert.equal(values[1][1], 10);
 		assert.equal(values[2][1], 12);
 	});
 
 	test("circular reference is reported as a loop", () => {
-		const { errors } = run([["a", "b"], ["=b2", "=a2"]]);
-		assert.match(String(errors[1][0]), /loop/);
+		const { errors } = run([["a", "b"], ["=B1", "=A1"]]);
+		assert.match(String(errors[1][0]), /loop\n[AB]1/);
 	});
 
 	test("reference outside the table is an error", () => {
-		assert.match(String(at([["a"], ["=z9"]], 1, 0).error), /out of/);
+		assert.match(String(at([["a"], ["=Z9"]], 1, 0).error), /out of/);
 	});
 
 	test("format() and scientific()", () => {
@@ -290,7 +294,7 @@ describe("regression: behaviour that must not change", () => {
 	});
 
 	test("'= escapes a formula", () => {
-		assert.equal(at([["a"], ["'=a1"]], 1, 0).value, "=a1");
+		assert.equal(at([["a"], ["'=A1"]], 1, 0).value, "=A1");
 	});
 
 	test("text cells are passed as strings", () => {
@@ -342,5 +346,64 @@ describe("notebook fixtures evaluate without errors", () => {
 
 	test("F3: 1.5e5 cell counts", { todo: BUG1 ? "bug 1" : undefined }, () => {
 		assert.equal(written("1.5e5"), "150000");
+	});
+});
+
+describe("references: uppercase columns, rows numbered after the header", () => {
+	test("A1 is the first row after the header", () => {
+		const { values } = run([["h"], ["7"], ["=A1*2"]]);
+		assert.equal(values[2][0], 14);
+	});
+
+	test("A0 (the header) is out of the table", () => {
+		const { errors } = run([["h"], ["=A0"]]);
+		assert.match(String(errors[1][0]), /out of/);
+	});
+
+	test("lowercase a1 is not a reference", () => {
+		const { values, errors } = run([["h"], ["7"], ["=a1"]]);
+		assert.equal(values[2][0], null);
+		assert.match(String(errors[2][0]), /a1/);
+	});
+
+	test("function names with digits are not references: log2, log10", () => {
+		const { values } = run([["h", "i"], ["=log2(8)", "=log10(100)"]]);
+		assert.equal(values[1][0], 3);
+		assert.equal(values[1][1], 2);
+	});
+
+	test("constants with digits are not references: LN2", () => {
+		const { values } = run([["h"], ["=LN2"]]);
+		assert.ok(Math.abs(values[1][0] - Math.LN2) < 1e-12);
+	});
+
+	test("two header rows: A1 is the first row after both", () => {
+		const grid = [["h1", "x"], ["h2", "y"], ["5", "=A1*2"], ["6", "=sum(A:A)"]];
+		const { values } = run(grid, { ...LOCALE, headerRows: 2 });
+		assert.equal(values[2][1], 10);
+		assert.equal(values[3][1], 11);
+	});
+
+	test("no header row: A1 is the first row", () => {
+		const { values } = run([["5", "=A1*2"]], { ...LOCALE, headerRows: 0 });
+		assert.equal(values[0][1], 10);
+	});
+});
+
+describe("quoted quantities in formulas", () => {
+	test('="5 mL" * 3 -> 15 mL', () => {
+		assertUnit(run([["h"], ['="5 mL" * 3']]).values[1][0], 15, "mL");
+	});
+
+	test('="500ng" * 2 -> 1000 ng', () => {
+		assertUnit(run([["h"], ['="500ng" * 2']]).values[1][0], 1000, "ng");
+	});
+
+	test("plain text in quotes stays a string", () => {
+		assert.equal(run([["h"], ['="pFN214"']]).values[1][0], "pFN214");
+	});
+
+	test("an unknown unit stays a string", () => {
+		assert.equal(run([["h"], ['="3 e5"']]).values[1][0], "3 e5");
 	});
 });

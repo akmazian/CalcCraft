@@ -9,7 +9,7 @@
 The plugin is intended to allow usage of formulas in tables, which are computed for the rendered version of the table.
 In source mode, or while editing, the formulas are visibile, in live-preview or read mode, the formulas are replaced by computed values.
 The plugin treats tables as spreadsheets, translating cells and ranges to the values, expanding and computing if necessary the referenced cells.
-The table is divided in columns (labeled from 'a' to 'z', and numerical rows)
+The table is divided in columns (labeled from 'A' to 'Z') and numbered rows. Row 1 is the first row after the header; the header itself is not numbered. If a table has several header rows (e.g. with the Table Extended or Table Master plugins), row 1 is the first row after all of them.
 
 After expanding the expressions are evaluated using  [mathjs](https://mathjs.org/docs/reference/functions.html), therefore supporting many functions from there. Ranges between `[ ... ]` are expanded as matrices, and can be used for matrix operations.
 ### operations
@@ -20,15 +20,15 @@ most of the functions from [mathjs](https://mathjs.org/docs/reference/functions.
 
 #### Spreadsheet like references
 If the result is a vector or a matrix the output will be expanded to multiple cells, and the references for those cells are recomputed.
-The references supported are in `[a-z][0-9]+` format (lowercase)
-Besides this `a1` reference style, the cells can be referenced using colum-row notation: `[0-9]+c[0-9]r`, where `c` stands for column and `r` stands for row. So for addressing the `b3` cell we could also write `2c3r` (column 2, row 3).
+The references supported are in `[A-Z][0-9]+` format (uppercase, as in Excel), e.g. `A1` for the first column of the first row after the header. Lowercase `a1` is not a reference.
+Besides this `A1` reference style, the cells can be referenced using colum-row notation: `[0-9]+c[0-9]r`, where `c` stands for column and `r` stands for row. So for addressing the `B3` cell we could also write `2c3r` (column 2, row 3).
 The column-row notation supports also relative referencing by adding a `+` or `-` before the number. 
 Combinations of the two are possible:
-- `=b+3r` cell at column `b` , 3 rows down.
-- `=2c7` cell at column 2 (which is b), row 7
+- `=B+3r` cell at column `B` , 3 rows down.
+- `=2c7` cell at column 2 (which is B), row 7
 the row-column notation is intended to be used mainly as a relative reference, for example getting the value above the curent cell: `=+0c-1r` (zero columns to the right, the row above)
 
-summing all the values in the curent column from the second row to the cell above the curent one:  `=sum(+0c2:+0c-1r)` 
+summing all the values in the curent column from the first row to the cell above the curent one:  `=sum(+0c1:+0c-1r)`
 
 #### Highlight involved cells
 The cells that influence the curent cell, are called `parents`, and the ones that depend on the curent cell are called `children`. Hovering the mouse over a cell, shows both the parents and the children, in customizable colors. This makes it easier to track the flow of data in the sheet. The colors can be customized for the dark theme and for the light theme.
@@ -38,13 +38,15 @@ If a cell loops back to itself while trying to be computed, a `loop` error is th
 ### Powered by MathJS with Units Support
 Formulas are evaluated using [mathjs](https://mathjs.org/docs/reference/functions.html)
 - **Native unit parsing**: `5 kg`,  `25 celsius`, `12 inch`
+- **Scientific notation**: `1.8e5`, `2e-3 M` in cells and `=2*1.8e5` in formulas
+- **Quoted quantities**: `="5 mL" * 3` gives `15 mL`
 - **Unit arithmetic**: `=5 kg + 3000 g` automatically converts and returns `8 kg`
 - **Unit conversion**: `=5 inch to cm` converts between unit systems
 - **Matrix operations with units**: Full support for unit calculations in ranges and matrices
 ### Matrix and Range Operations
 Ranges between `[...]` are expanded as matrices and can be used for matrix operations:
-- **Standard ranges**: `a1:c3` flattens to a 1D array for functions like `sum()`
-- **Matrix ranges**: `[a1:c3]` preserves 2D structure for matrix operations
+- **Standard ranges**: `A1:C3` flattens to a 1D array for functions like `sum()`
+- **Matrix ranges**: `[A1:C3]` preserves 2D structure for matrix operations
 If the result is a vector or matrix, the output expands to multiple cells, and references for those cells are automatically recomputed.
 ### Smart Processing Options
 - **Class filtering**: Only process tables in files with specific `cssclass` in frontmatter
@@ -53,18 +55,18 @@ If the result is a vector or matrix, the output expands to multiple cells, and r
 
 | Month     | Income      | Rent        | Groceries   | Entertainment | Savings                              |
 | --------- | ----------- | ----------- | ----------- | ------------- | ------------------------------------ |
-| January   | 1800        | 1000        | 300         | 200           | =[b2:b99]-[c2:c99]-[d2:d99]-[e2:e99] |
-| February  | 1700        | 1000        | 310         | 210           | =[b2:b99]-[c2:c99]-[d2:d99]-[e2:e99] |
-| March     | 1880        | 1000        | 320         | 220           | =[b2:b99]-[c2:c99]-[d2:d99]-[e2:e99] |
-| April     | 1720        | 1000        | 330         | 230           | =[b2:b99]-[c2:c99]-[d2:d99]-[e2:e99] |
-| **Total** | =sum(b2:b5) | =sum(c2:c5) | =sum(d2:d5) | =sum(e2:e5)   |                                      |
+| January   | 1800        | 1000        | 300         | 200           | =[B1:B98]-[C1:C98]-[D1:D98]-[E1:E98] |
+| February  | 1700        | 1000        | 310         | 210           | =[B1:B98]-[C1:C98]-[D1:D98]-[E1:E98] |
+| March     | 1880        | 1000        | 320         | 220           | =[B1:B98]-[C1:C98]-[D1:D98]-[E1:E98] |
+| April     | 1720        | 1000        | 330         | 230           | =[B1:B98]-[C1:C98]-[D1:D98]-[E1:E98] |
+| **Total** | =sum(B1:B4) | =sum(C1:C4) | =sum(D1:D4) | =sum(E1:E4)   |                                      |
 
 ![ ](./doc/images/README-20250912-1514-173.webp)
 
 ### simple sum, simple reference
 | plums | bananas | fruits |
 | ----- | ------- | ------ |
-| 5     | 12      | =a2+b2 |
+| 5     | 12      | =A1+B1 |
 ![ ](./doc/images/README-20250912-1514-208.webp)
 ### simple sum, relative reference
 `[+-]?[0-9]+r[+-]?[0-9]+c`:
@@ -84,18 +86,18 @@ examples:
 ### ranges
 | plums | bananas | fruits          |
 | ----- | ------- | --------------- |
-| 5     | 12      | =sum(a2:b4)     |
-| 7     | 5       | =sum(a2:b4) >20 |
+| 5     | 12      | =sum(A1:B3)     |
+| 7     | 5       | =sum(A1:B3) >20 |
 | 9     | 7       |                 |
 ![ ](./doc/images/README-20250912-1515-799.webp)
 ### ranges with relative reference
 
 | plums           | bananas       | fruits        |
 | --------------- | ------------- | ------------- |
-| 5               | 12            | =sum(1c2:2c4) |
-| 7               | 5             | =sum(a2r:b4r) |
+| 5               | 12            | =sum(1c1:2c3) |
+| 7               | 5             | =sum(A1r:B3r) |
 | 9               | 7             |               |
-| =sum(a2:+0c-1r) | =sum(b2:b-1r) |               |
+| =sum(A1:+0c-1r) | =sum(B1:B-1r) |               |
 ![ ](./doc/images/README-20250912-1516-737.webp)
 ### vector sum
 `ranges in [ ... ]`
@@ -104,7 +106,7 @@ values that don't fit in the existing table are disgarded
 
 | plums | bananas | fruits           |
 | ----- | ------- | ---------------- |
-| 5     | 12      | =[a2:a4]+[b2:b4] |
+| 5     | 12      | =[A1:A3]+[B1:B3] |
 | 7     | 5       |                  |
 | 19    | 10      |                  |
 ![ ](./doc/images/README-20250912-1516-235.webp)
@@ -112,7 +114,7 @@ values that don't fit in the existing table are disgarded
 #### transpose
 | m1  |     |     |     |                     |     |     |
 | --- | --- | --- | --- | ------------------- | --- | --- |
-| 1   | 2   | 3   |     | =transpose([a2:c4]) |     |     |
+| 1   | 2   | 3   |     | =transpose([A1:C3]) |     |     |
 | 4   | 5   | 6   |     |                     |     |     |
 | 7   | 8   | 9   |     |                     |     |     |
 
@@ -121,23 +123,23 @@ values that don't fit in the existing table are disgarded
 
 | m1  |     |     |     |                |     |     |
 | --- | --- | --- | --- | -------------- | --- | --- |
-| 1   | 2   | 3   |     | =diag([a2:c4]) |     |     |
+| 1   | 2   | 3   |     | =diag([A1:C3]) |     |     |
 | 4   | 5   | 6   |     |                |     |     |
 | 7   | 8   | 9   |     |                |     |     |
 ![ ](./doc/images/README-20250912-1517-329.webp)
 #### matrix vector multiplication
 | m1  |     |     |     | r1                |     | r2              |     |
 | --- | --- | --- | --- | ----------------- | --- | --------------- | --- |
-| 1   | 2   | 3   |     | =[a2:c4]\*[1,1,1] |     | =sum(a+0r:c+0r) |     |
-| 4   | 5   | 6   |     |                   |     | =sum(a+0r:c+0r) |     |
-| 7   | 8   | 9   |     |                   |     | =sum(a+0r:c+0r) |     |
+| 1   | 2   | 3   |     | =[A1:C3]\*[1,1,1] |     | =sum(A+0r:C+0r) |     |
+| 4   | 5   | 6   |     |                   |     | =sum(A+0r:C+0r) |     |
+| 7   | 8   | 9   |     |                   |     | =sum(A+0r:C+0r) |     |
 ![ ](./doc/images/README-20250912-1517-237.webp)
 #### determinant
-`=det([a2:c4])`
+`=det([A1:C3])`
 
 | m1  |     |     |     |               |     |
 | --- | --- | --- | --- | ------------- | --- |
-| 1   | 2   | 3   |     | =det([a2:c4]) |     |
+| 1   | 2   | 3   |     | =det([A1:C3]) |     |
 | 4   | 5   | 7   |     |               |     |
 | 7   | 8   | 9   |     |               |     |
 ![ ](./doc/images/README-20250912-1517-34.webp)
@@ -145,7 +147,7 @@ values that don't fit in the existing table are disgarded
 
 | m1  |     |     |     | r1                      |     |     |     |
 | --- | --- | --- | --- | ----------------------- | --- | --- | --- |
-| 1   | 2   | 3   |     | =([a2:c4]>=5).\*[a2:c4] |     |     |     |
+| 1   | 2   | 3   |     | =([A1:C3]>=5).\*[A1:C3] |     |     |     |
 | 4   | 5   | 6   |     |                         |     |     |     |
 | 7   | 8   | 9   |     |                         |     |     |     |
 
@@ -154,7 +156,7 @@ values that don't fit in the existing table are disgarded
 
 | decimal                   | hex             | bin             | sin             | isprime             |
 | ------------------------- | --------------- | --------------- | --------------- | ------------------- |
-| =transpose(range(1,20,2)) | =map([a:a],hex) | =map([a:a],bin) | =map([a:a],sin) | =map([a:a],isPrime) |
+| =transpose(range(1,20,2)) | =map([A:A],hex) | =map([A:A],bin) | =map([A:A],sin) | =map([A:A],isPrime) |
 |                           |                 |                 |                 |                     |
 |                           |                 |                 |                 |                     |
 |                           |                 |                 |                 |                     |
@@ -168,7 +170,7 @@ values that don't fit in the existing table are disgarded
 ### test if it's numeric
 | label | number?           | total     |     |
 | ----- | ----------------- | --------- | --- |
-| 3     | =isNumeric([a:a]) | =sum(b:b) |     |
+| 3     | =isNumeric([A:A]) | =sum(B:B) |     |
 | not   |                   |           |     |
 | 2     |                   |           |     |
 | pen   |                   |           |     |
@@ -180,8 +182,8 @@ values that don't fit in the existing table are disgarded
 ### change units
 | inch    | cm                  |     |
 | ------- | ------------------- | --- |
-| 12 inch | =to(unit(a2), "cm") |     |
-| 5 inch  | =to(unit(a3), "cm") |     |
+| 12 inch | =to(unit(A1), "cm") |     |
+| 5 inch  | =to(unit(A2), "cm") |     |
 
 ![ ](./doc/images/README-20250912-1519-906.webp)
 
@@ -189,7 +191,7 @@ values that don't fit in the existing table are disgarded
 
 | distance | time     | speed         |
 | -------- | -------- | ------------- |
-| 5 m      | 10 s     | =[a:a]./[b:b] |
+| 5 m      | 10 s     | =[A:A]./[B:B] |
 | 5 inch   | 10 mins  |               |
 | 100 km   | 7 day    |               |
 | = 500km  | 0.5 year |               |
@@ -200,7 +202,7 @@ values that don't fit in the existing table are disgarded
 
 | initial speed | final spped | time | acc                   |
 | ------------- | ----------- | ---- | --------------------- |
-| 10 km/h       | 100 km/h    | 10 s | =([b:b]-[a:a])./[c:c] |
+| 10 km/h       | 100 km/h    | 10 s | =([B:B]-[A:A])./[C:C] |
 | 20 m/s        | 10 m/s      | 5 s  |                       |
 
 ![ ](./doc/images/README-20250912-1519-155.webp)
@@ -220,14 +222,14 @@ values that don't fit in the existing table are disgarded
 |                  1                  | 3   | 4   | 8   | 8                   | 1   |             |
 |                  2                  | 5   | 8   | 3   | 8                   | 1   |             |
 |                  1                  | 4   | 8   | 3   | 1                   | 1   |             |
-|             =sum(f7:g9)             | 3   | 1   |     |                     |     |             |
+|             =sum(F6:G8)             | 3   | 1   |     |                     |     |             |
 |                                     |     |     |     |                     |     |             |
-|    =diag([a2:c4])\*diag([a2:c4])    |     |     |     | =transpose([a3:c5]) | 0   |             |
-| =dotMultiply(diag([a2:c4]),[a2:a4]) |     |     | 3   | 0                   |     |             |
+|    =diag([A1:C3])\*diag([A1:C3])    |     |     |     | =transpose([A2:C4]) | 0   |             |
+| =dotMultiply(diag([A1:C3]),[A1:A3]) |     |     | 3   | 0                   |     |             |
 |                                     |     |     |     |                     |     |             |
 |                                     |     |     |     |                     |     |             |
-|    =dotMultiply([a2:c4],[d2:f4])    |     |     |     |                     |     | =sum(d7:f9) |
-|                                     |     |     |     | =sum(a:f)           |     |             |
+|    =dotMultiply([A1:C3],[D1:F3])    |     |     |     |                     |     | =sum(D6:F8) |
+|                                     |     |     |     | =sum(A:F)           |     |             |
 |                                     |     |     |     |                     |     |             |
 |                                     |     |     |     |                     |     |             |
 
@@ -281,7 +283,7 @@ CalcCraft now provides full edit mode support:
 
 1. **Use relative references** for formulas you want to copy across rows/columns
 2. **Hover over cells** to understand dependencies and data flow
-3. **Use `[a1:c3]` for matrix operations**, `a1:c3` for simple ranges
+3. **Use `[A1:C3]` for matrix operations**, `A1:C3` for simple ranges
 4. **Include units in your data** - the plugin handles conversions automatically
 5. **Check the browser console** (F12) for detailed debugging information
 6. **Use cssclass filtering** if you only need calccraft on specific pages

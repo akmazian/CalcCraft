@@ -162,13 +162,15 @@ export default class CalcCraftPlugin extends Plugin {
 					this.clearTableHighlights(tableEl);
 					(tableEl as any).CalcCraft = { settings: this.settings };
 
+					const headerRows = this.countHeaderRows(tableEl);
+
 					if (this.settings.showLabels) {
-						this.addSimpleLabels(tableEl);
+						this.addSimpleLabels(tableEl, headerRows);
 					}
 
 					const gridData = this.extractTableGrid(tableEl);
 					const evaluator = new TableEvaluator();
-					const result = evaluator.evaluateTable(gridData, this.settings);
+					const result = evaluator.evaluateTable(gridData, { ...this.settings, headerRows });
 
 					this.applyResultsToHTML(tableEl, result, gridData, evaluator);
 				} catch (error) {
@@ -299,25 +301,36 @@ export default class CalcCraftPlugin extends Plugin {
 		this.addTableEventListeners(tableEl);
 	}
 
+	// Header rows are the leading rows made only of <th>. Markdown tables have one;
+	// plugins such as Table Extended and Table Master allow several.
+	private countHeaderRows(tableEl: HTMLTableElement): number {
+		let count = 0;
+		for (const row of Array.from(tableEl.rows)) {
+			const cells = Array.from(row.cells);
+			if (cells.length === 0 || !cells.every(cell => cell.tagName === "TH")) break;
+			count++;
+		}
+		return count;
+	}
+
 	// Labels are rendered by CSS pseudo-elements from these data attributes (see styles.css)
-	private addSimpleLabels(tableEl: HTMLTableElement): void {
-		// Label the first row (column headers) - works for both th and td
+	private addSimpleLabels(tableEl: HTMLTableElement, headerRows: number): void {
+		// Column letters on the first row
 		const firstRow = tableEl.rows[0];
 		if (firstRow) {
 			Array.from(firstRow.cells).forEach((cell, colIndex) => {
-				if (!cell.dataset.colLabeled) {
-					cell.dataset.colLabeled = 'true';
-					cell.dataset.colLetter = String.fromCharCode(97 + colIndex); // 'a' + index
-				}
+				cell.dataset.colLetter = String.fromCharCode(65 + colIndex); // 'A' + index
 			});
 		}
 
-		// Label ALL rows (both thead and tbody)
+		// Row numbers start at 1 on the first row after the header
 		Array.from(tableEl.rows).forEach((row, rowIndex) => {
 			const firstCell = row.cells[0];
-			if (firstCell && !firstCell.dataset.rowLabeled) {
-				firstCell.dataset.rowLabeled = 'true';
-				firstCell.dataset.rowNumber = String(rowIndex + 1);
+			if (!firstCell) return;
+			if (rowIndex < headerRows) {
+				delete firstCell.dataset.rowNumber;
+			} else {
+				firstCell.dataset.rowNumber = String(rowIndex - headerRows + 1);
 			}
 		});
 	}

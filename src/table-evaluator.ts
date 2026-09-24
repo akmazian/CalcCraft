@@ -103,6 +103,8 @@ export class TableEvaluator {
     maxrows = 0;
     useBool = false;
     settings: any;
+    // Rows 1, 2, ... are numbered from the first row after the header rows
+    headerRows = 1;
 
     private parseLocaleNumber(str: string): number {
         const decimal = this.settings.decimalSeparator || ".";
@@ -124,6 +126,7 @@ export class TableEvaluator {
             decimalSeparator: ".",
             groupingSeparator: ","
         };
+        this.headerRows = this.settings.headerRows ?? 1;
 
         // Reset all arrays
         this.tableData = [];
@@ -242,12 +245,17 @@ export class TableEvaluator {
     }
 
     cords2ref(row: number, col: number): string {
-        const colStr = String.fromCharCode("a".charCodeAt(0) + col);
-        return colStr + (row + 1);
+        const colStr = String.fromCharCode("A".charCodeAt(0) + col);
+        return colStr + (row - this.headerRows + 1);
+    }
+
+    // Absolute row number (1 = first row after the header) to grid index; -1 if out of range
+    rowIndex(rowNumber: number): number {
+        return rowNumber < 1 ? -1 : rowNumber + this.headerRows - 1;
     }
 
     ref2cords(ref: string, formulaRow = 0, formulaCol = 0): [number, number] | null {
-        const match = ref.match(/^([a-z]+|([+-]?)\d+c)(\d+|([+-]?)\d+r)$/);
+        const match = ref.match(/^([A-Z]+|([+-]?)\d+c)(\d+|([+-]?)\d+r)$/);
 
         if (!match) {
             this.errors[formulaRow][formulaCol] = "invalid cell reference";
@@ -258,7 +266,7 @@ export class TableEvaluator {
 
         let col, row;
 
-        if (colPart && colPart[0].match(/[a-z]/)) {
+        if (colPart && colPart[0].match(/[A-Z]/)) {
             col = this.letter2col(colPart);
         } else if (colPart.endsWith("c")) {
             col = parseInt(colPart.replace("c", "")) + (altColPart ? formulaCol : -1);
@@ -268,20 +276,16 @@ export class TableEvaluator {
 
         if (rowPart && rowPart.includes("r")) {
             const rw = parseInt(rowPart.replace("r", ""));
-            row = altRowPart ? formulaRow + rw : rw - 1;
+            row = altRowPart ? formulaRow + rw : this.rowIndex(rw);
         } else {
-            row = parseInt(rowPart) - 1;
+            row = this.rowIndex(parseInt(rowPart));
         }
 
         return [row, col];
     }
 
     letter2col(letter: string): number {
-        return letter.charCodeAt(0) - "a".charCodeAt(0);
-    }
-
-    number2row(nr: number): number {
-        return nr - 1;
+        return letter.charCodeAt(0) - "A".charCodeAt(0);
     }
 
     copyArrayValues(sourceArray: any[][], targetArray: any[][], row: number, col: number): void {
@@ -370,7 +374,7 @@ export class TableEvaluator {
 
             let processedformula;
             try {
-                processedformula = this.parsefunction(formula, [row, col]);
+                processedformula = this.unquoteUnits(this.parsefunction(formula, [row, col]));
             } catch (error) {
                 if (error instanceof InfiniteLoop) {
                     const ref = this.cords2ref(row, col);
@@ -619,24 +623,28 @@ export class TableEvaluator {
             } else {
                 const restformula = formula.slice(i);
                 this.debug(`rest formula is:${restformula}`);
-                const matchCell = restformula.match(/^([a-z]|[+-]?\d+c)([+-]?\d+r|\d+)/);
+                // a letter or _ before this point means we are inside a name such as log2 or LN2
+                const inName = i > 0 && /[A-Za-z_]/.test(formula[i - 1]);
+                const matchRef = (re: RegExp) => (inName ? null : restformula.match(re));
 
-                const matchRange = restformula.match(
-                    /^([a-z]|[+-]?\d+c)([+-]?\d+r|\d+):([a-z]|[+-]?\d+c)([+-]?\d+r|\d+)/
+                const matchCell = matchRef(/^([A-Z]|[+-]?\d+c)([+-]?\d+r|\d+)/);
+
+                const matchRange = matchRef(
+                    /^([A-Z]|[+-]?\d+c)([+-]?\d+r|\d+):([A-Z]|[+-]?\d+c)([+-]?\d+r|\d+)/
                 );
 
                 const matchMatrix = restformula.match(
                     //basically matchRange but between `[` `]`
-                    /^\[([a-z]|[+-]\d+c)([+-]\d+r|\d+):([a-z]|[+-]\d+c)([+-]\d+r|\d+)\]/
+                    /^\[([A-Z]|[+-]\d+c)([+-]\d+r|\d+):([A-Z]|[+-]\d+c)([+-]\d+r|\d+)\]/
                 );
 
                 const matchformula = restformula.match(/^[a-zA-Z]{3,}\(/);
 
                 const matchNum = restformula.match(/^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/);
 
-                const matchRangeCol = restformula.match(/^[a-z]:[a-z]/); //column range
-                const matchRangeColMatrix = restformula.match(/^\[[a-z]:[a-z]\]/); //column range
-                const matchRangeRow = restformula.match(/^\d+:\d+/); //row range
+                const matchRangeCol = matchRef(/^[A-Z]:[A-Z]/); //column range
+                const matchRangeColMatrix = restformula.match(/^\[[A-Z]:[A-Z]\]/); //column range
+                const matchRangeRow = matchRef(/^\d+:\d+/); //row range
 
                 if (matchRange) {
                     /* normal range a3:b7 or a-3:b+7, or anything in between;
@@ -666,14 +674,14 @@ export class TableEvaluator {
                     this.debug(`we matched a column range`);
                     i += matchRangeCol[0].length - 1;
                     const [start, end] = matchRangeCol[0].split(":"); // Split the range into start and end
-                    const [startCol, startRow] = [this.letter2col(start), 1]; // we skip the first row
+                    const [startCol, startRow] = [this.letter2col(start), this.headerRows]; // we skip the header
                     const [endCol, endRow] = [this.letter2col(end), this.maxrows - 1];
                     results += this.unfoldRange(startRow, endRow, startCol, endCol, pos);
                 } else if (matchRangeColMatrix) {
                     this.debug(`we matched a column range Matrix`);
                     i += matchRangeColMatrix[0].length - 1;
                     const [start, end] = matchRangeColMatrix[0].slice(1, -1).split(":"); // Split the range into start and end
-                    const [startCol, startRow] = [this.letter2col(start), 1];  // we skip the first row
+                    const [startCol, startRow] = [this.letter2col(start), this.headerRows]; // we skip the header
                     const [endCol, endRow] = [this.letter2col(end), this.maxrows - 1];
                     results += this.unfoldRange(startRow, endRow, startCol, endCol, pos, true);
                 } else if (matchRangeRow) {
@@ -682,8 +690,8 @@ export class TableEvaluator {
                     const [start, end] = matchRangeRow[0].split(":"); // Split the range into start and end
                     const startCol = 0;
                     const endCol = this.maxcols - 1;
-                    const startRow = this.number2row(parseInt(start));
-                    const endRow = this.number2row(parseInt(end));
+                    const startRow = this.rowIndex(parseInt(start));
+                    const endRow = this.rowIndex(parseInt(end));
                     results += this.unfoldRange(startRow, endRow, startCol, endCol, pos);
                 } else if (matchformula) {
                     this.debug(`we matched formula ${matchformula}`);
@@ -763,6 +771,21 @@ export class TableEvaluator {
         }
     }
 
+
+    // ="5 mL" * 3 -> (5 mL) * 3: a quoted quantity with a valid unit behaves like a unit cell
+    private unquoteUnits(formula: string): string {
+        return formula.replace(/"([^"]*)"/g, (match, content: string) => {
+            const parsed = this.parseUnitValue(content);
+            if (!parsed.unit) return match;
+            const quantity = `${parsed.value} ${parsed.unit}`;
+            try {
+                math.unit(quantity);
+                return `(${quantity})`;
+            } catch {
+                return match;
+            }
+        });
+    }
 
     debug(message: any): void {
         if (debug) {

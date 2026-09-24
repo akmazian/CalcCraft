@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **References are uppercase**, as in Excel: `A1`, `B2:C4`, `A:F`, `[A1:C3]`. Lowercase `a1` is no longer a reference. The relative `c`/`r` notation (`2c1`, `+0c-1r`) is unchanged.
+- **Row 1 is the first row after the header.** The header row is not numbered, and with several header rows (Table Extended, Table Master) row 1 is the first row after all of them. Existing formulas need updating: `=c2*d2` becomes `=C1*D1`.
+- Column labels are shown uppercase and row labels start at 1 on the first data row
+- References are no longer matched inside names, so `log2(8)`, `log10(100)` and `LN2` work
+
+### Added
+- Quoted quantities in formulas: `="5 mL" * 3` gives `15 mL`
+
 ### Fixed
 - Scientific notation in a referenced cell (`1.8e5`, `2e-3 M`) was read as the number `1.8` with the unit `e5`, so formulas referencing it failed
 - Scientific notation typed into a formula (`=2*1.8e5`) was split up and `e5` treated as a cell reference; decimals in formulas are now kept whole
