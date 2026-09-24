@@ -1,13 +1,10 @@
-// table-evaluator.ts
-// At the top with imports
-
-const debug=false;
-
 import { create, all } from 'mathjs';
+
+const debug = false;
 
 const math = create(all);
 
-// Custom sum function that handles units and skips zeros
+// Custom format(), scientific() and a unit-aware sum() that skips empty cells
 math.import({
     format: function(value: any, precision: number) {
         if (typeof value === 'number') {
@@ -29,7 +26,7 @@ math.import({
         }
         return String(value);
     },
-        scientific: function(value: any, precision: number = 2) {
+    scientific: function(value: any, precision = 2) {
         if (typeof value === 'number') {
             // Use toExponential for scientific notation
             const formatted = value.toExponential(precision);
@@ -68,8 +65,6 @@ math.import({
     }
 }, { override: true });
 
-const evaluate = math.evaluate;
-
 enum celltype {
     number = 1,
     formula,
@@ -104,34 +99,33 @@ export class TableEvaluator {
     errors: (string | null)[][] = [];
     parents: [number, number][][][] = [];
     children: [number, number][][][] = [];
-    maxcols: number = 0;
-    maxrows: number = 0;
+    maxcols = 0;
+    maxrows = 0;
     useBool = false;
     settings: any;
 
     private parseLocaleNumber(str: string): number {
-    const decimal = this.settings.decimalSeparator || ".";
-    const grouping = this.settings.groupingSeparator || ",";
+        const decimal = this.settings.decimalSeparator || ".";
+        const grouping = this.settings.groupingSeparator || ",";
 
-    // Remove grouping separators, replace decimal with dot for parseFloat
-    const normalized = String(str)
-      .replace(new RegExp('\\' + grouping.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
-      .replace(decimal, '.');
+        // Remove grouping separators, replace decimal with dot for parseFloat
+        const normalized = String(str)
+            .replace(new RegExp('\\' + grouping.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
+            .replace(decimal, '.');
 
-    return parseFloat(normalized);
+        return parseFloat(normalized);
     }
 
-
     evaluateTable(gridData: string[][], settings?: any): TableResult {
-      // Set settings with defaults
-      this.settings = settings || { 
-        decimalSeparator: ".", 
-        groupingSeparator: "," 
-      };
-      
-      // Reset all arrays
-      this.tableData = [];
-      this.formulaData = [];
+        // Set settings with defaults
+        this.settings = settings || {
+            decimalSeparator: ".",
+            groupingSeparator: ","
+        };
+
+        // Reset all arrays
+        this.tableData = [];
+        this.formulaData = [];
         this.celltype = [];
         this.cellstatus = [];
         this.errors = [];
@@ -302,41 +296,27 @@ export class TableEvaluator {
 
 
     private parseUnitValue(cellContent: string): { value: number; unit: string | null } {
-      if (typeof cellContent !== 'string') {
-        return { value: this.parseLocaleNumber(cellContent), unit: null };
-      }
-
-      const unitMatch = cellContent.trim().match(/^(-?[\d,\.\s]+)\s*([a-zA-Z]+.*)?$/);
-      if (unitMatch) {
-        const [, numberPart, unitPart] = unitMatch;
-        const value = this.parseLocaleNumber(numberPart);
-        if (!isNaN(value) && isFinite(value)) {
-          return { value, unit: unitPart ? unitPart.trim() : null };
+        if (typeof cellContent !== 'string') {
+            return { value: this.parseLocaleNumber(cellContent), unit: null };
         }
-      }
 
-      // Try to parse as plain number
-      const numValue = this.parseLocaleNumber(cellContent);
-      if (!isNaN(numValue) && isFinite(numValue)) {
-        return { value: numValue, unit: null };
-      }
-
-      return { value: NaN, unit: null };  
-    }
-
-
-    private applyCustomFormat(value: any, precision: number): string {
-        if (typeof value === 'number') {
-            if (precision >= 0) {
-                const fixed = value.toFixed(precision);
-                // Remove trailing zeros
-                return fixed.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+        const unitMatch = cellContent.trim().match(/^(-?[\d,.\s]+)\s*([a-zA-Z]+.*)?$/);
+        if (unitMatch) {
+            const [, numberPart, unitPart] = unitMatch;
+            const value = this.parseLocaleNumber(numberPart);
+            if (!isNaN(value) && isFinite(value)) {
+                return { value, unit: unitPart ? unitPart.trim() : null };
             }
-            return value.toString();
         }
-        return String(value);
-    }
 
+        // Try to parse as plain number
+        const numValue = this.parseLocaleNumber(cellContent);
+        if (!isNaN(numValue) && isFinite(numValue)) {
+            return { value: numValue, unit: null };
+        }
+
+        return { value: NaN, unit: null };
+    }
 
     getValueByCoordinates(row: number, col: number) {
         const r = this.cords2ref(row, col);
@@ -398,70 +378,59 @@ export class TableEvaluator {
                 throw error;
             }
 
-            // In getValueByCoordinates method, replace the result handling section:
+            try {
+                this.debug(`we will evaluate the formula: ${processedformula}`);
+                const result = math.evaluate(processedformula);
 
-try {
-    this.debug(`we will evaluate the formula: ${processedformula}`);
-    const result = math.evaluate(processedformula);
-    
-    if (result && typeof result === 'object' && result._isFormatted) {
-        const formatted = this.applyCustomFormat(result.value, result.precision);
-        this.cellstatus[row][col] = cellstatus.iscomputed;
-        this.tableData[row][col] = formatted;
-        return formatted;
-    }
-    
-    this.debug(
-        `we were asked to fill in at ${this.cords2ref(
-            row,
-            col
-        )} with formula: ${formula} ; the result is ${result}`
-    );
+                this.debug(
+                    `we were asked to fill in at ${this.cords2ref(
+                        row,
+                        col
+                    )} with formula: ${formula} ; the result is ${result}`
+                );
 
-    // Handle mathjs Matrix objects (like DenseMatrix2)
-    if (result && typeof result === "object" && result.constructor?.name?.includes("Matrix")) {
-        // Convert mathjs Matrix to plain array using toArray()
-        const matrixArray = result.toArray();
-        return this.fillInMatrix(row, col, matrixArray);
-    }
-    
-    // Handle mathjs Unit objects
-    if (result && typeof result === "object" && result.constructor?.name === "Unit") {
-        this.cellstatus[row][col] = cellstatus.iscomputed;
-        this.tableData[row][col] = result;
-        return result; 
-    }
-    
-    // Check if result is already a plain JavaScript array
-    if (Array.isArray(result)) {
-        return this.fillInMatrix(row, col, result);
-    }
-    
-    // Try to parse as JSON only if it's a string (legacy support)
-    if (typeof result === "string") {
-        try {
-            const parsed = JSON.parse(result);
-            if (Array.isArray(parsed)) {
-                return this.fillInMatrix(row, col, parsed);
+                // Handle mathjs Matrix objects (like DenseMatrix2)
+                if (result && typeof result === "object" && result.constructor?.name?.includes("Matrix")) {
+                    // Convert mathjs Matrix to plain array using toArray()
+                    const matrixArray = result.toArray();
+                    return this.fillInMatrix(row, col, matrixArray);
+                }
+
+                // Handle mathjs Unit objects
+                if (result && typeof result === "object" && result.constructor?.name === "Unit") {
+                    this.cellstatus[row][col] = cellstatus.iscomputed;
+                    this.tableData[row][col] = result;
+                    return result;
+                }
+
+                // Check if result is already a plain JavaScript array
+                if (Array.isArray(result)) {
+                    return this.fillInMatrix(row, col, result);
+                }
+
+                // Try to parse as JSON only if it's a string (legacy support)
+                if (typeof result === "string") {
+                    try {
+                        const parsed = JSON.parse(result);
+                        if (Array.isArray(parsed)) {
+                            return this.fillInMatrix(row, col, parsed);
+                        }
+                    } catch {
+                        // Not JSON, continue with regular handling
+                    }
+                }
+
+                // Regular scalar result
+                this.cellstatus[row][col] = cellstatus.iscomputed;
+                this.tableData[row][col] = result;
+                return result;
+            } catch (error) {
+                this.errors[row][col] = error.message;
+                this.cellstatus[row][col] = cellstatus.iscomputed;
+                this.tableData[row][col] = null;
+                this.debug(`error computing cell ${r}`);
+                return null;
             }
-        } catch {
-            // Not JSON, continue with regular handling
-        }
-    }
-
-    // Regular scalar result
-    this.cellstatus[row][col] = cellstatus.iscomputed;
-    this.tableData[row][col] = result;
-    return result;
-} catch (error) {
-    this.errors[row][col] = error.message;
-    this.cellstatus[row][col] = cellstatus.iscomputed;
-    this.tableData[row][col] = null;
-    const r = this.cords2ref(row, col);
-    this.debug(`error computing cell ${r}`);
-    return null;
-}
-
         }
     }
 
@@ -649,8 +618,6 @@ try {
                 this.debug(`rest formula is:${restformula}`);
                 const matchCell = restformula.match(/^([a-z]|[+-]?\d+c)([+-]?\d+r|\d+)/);
 
-                //const matchOp = restformula.match(/^[+\-*/]/);
-
                 const matchRange = restformula.match(
                     /^([a-z]|[+-]?\d+c)([+-]?\d+r|\d+):([a-z]|[+-]?\d+c)([+-]?\d+r|\d+)/
                 );
@@ -663,9 +630,6 @@ try {
                 const matchformula = restformula.match(/^[a-zA-Z]{3,}\(/);
 
                 const matchNum = restformula.match(/^\d+/);
-
-                //const matchRange=restformula.match(/^[a-z]\d+:[a-z]\d+/); //normal range
-                //const matchRange = restformula.match(/^[a-z](?:\+|-)?\d+:[a-z](?:\+|-)?\d+/);
 
                 const matchRangeCol = restformula.match(/^[a-z]:[a-z]/); //column range
                 const matchRangeColMatrix = restformula.match(/^\[[a-z]:[a-z]\]/); //column range
@@ -739,11 +703,7 @@ try {
                     this.debug(`we matched a number`);
                     results += matchNum[0];
                     i += matchNum[0].length - 1;
-                } /*else if (matchOp) {
-					this.debug(`we matched a operation`);
-					results += matchOp[0];
-					i += matchOp[0].length - 1;
-				}*/ else {
+                } else {
                     results += restformula[0];
                     this.debug(`we didn't match anything`);
                 }
@@ -757,7 +717,7 @@ try {
     }
 
 
-        unfoldRange(startRow: number, endRow: number, startCol: number, endCol: number, formulaPos: [number, number] = [0, 0], matrix = false, nullAsZero=true): string {
+    unfoldRange(startRow: number, endRow: number, startCol: number, endCol: number, formulaPos: [number, number] = [0, 0], matrix = false, nullAsZero = true): string {
         const [formulaRow, formulaCol] = formulaPos;
         [startRow, endRow] = startRow > endRow ? [endRow, startRow] : [startRow, endRow];
         [startCol, endCol] = startCol > endCol ? [endCol, startCol] : [startCol, endCol];
@@ -776,9 +736,6 @@ try {
                 this.children[r][c].push([formulaRow, formulaCol]);
 
                 const val = this.getValueByCoordinates(r, c);
-
-                // For null values in matrices, use 0 to maintain matrix structure
-                //const matrixVal = val === null ? "null" : val;
                 colArray.push(val);
             }
             rowArray.push(colArray);
@@ -804,60 +761,9 @@ try {
     }
 
 
-    private sanitizeFormula(formula: string): string {
-        // Remove potentially dangerous patterns
-        const dangerous = [
-            /import\s*\(/gi,
-            /require\s*\(/gi,
-            /eval\s*\(/gi,
-            /Function\s*\(/gi,
-            /constructor/gi,
-            /prototype/gi,
-            /__proto__/gi,
-            /process\./gi,
-            /global\./gi,
-            /window\./gi,
-            /document\./gi
-        ];
-
-        for (const pattern of dangerous) {
-            if (pattern.test(formula)) {
-                throw new Error(`Formula contains forbidden pattern: ${pattern.source}`);
-            }
-        }
-
-        // Limit formula length to prevent DoS
-        if (formula.length > 1000) {
-            throw new Error("Formula too long");
-        }
-
-        return formula.trim();
-    }
-
-    private sanitizeProcessedFormula(processedFormula: string): string {
-        // Validate the final formula before mathjs gets it
-
-        // Check for suspicious function calls that might have been constructed
-        const suspiciousPatterns = [
-            /eval\s*\(/gi,
-            /Function\s*\(/gi,
-            /constructor\s*\(/gi,
-            /\[.*["'].*["'].*\]/gi, // bracket notation with strings
-        ];
-
-        for (const pattern of suspiciousPatterns) {
-            if (pattern.test(processedFormula)) {
-                throw new Error("Processed formula contains suspicious patterns");
-            }
-        }
-
-        return processedFormula;
-    }
-
     debug(message: any): void {
         if (debug) {
             console.log(message);
-
         }
     }
 }

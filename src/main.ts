@@ -1,5 +1,4 @@
-
-import { Plugin, MarkdownPostProcessorContext, App, MarkdownView, debounce, TFile } from "obsidian";
+import { Plugin, MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
 import { CalcCraftSettingsTab, DefaultSettings } from "./settings";
 import { TableEvaluator } from "./table-evaluator";
 
@@ -9,10 +8,7 @@ export default class CalcCraftPlugin extends Plugin {
 	settings: any = {};
 	settings_tab: CalcCraftSettingsTab;
 	cssVariables: string[] = [];
-	colOffset = 0;
-	rowOffset = 0;
 	htmlTable: HTMLElement[][] = [];
-	useBool = false; //keep true and false, otherwise convert them to 0 and 1
 	private suspendMutations = false;          // ignore MutationObserver notifications while we mutate
 	private isEvaluating = false;              // prevent re-entrant recompute runs
 	private recomputeTimer: number | null = null; // for debouncing recompute calls
@@ -65,7 +61,7 @@ export default class CalcCraftPlugin extends Plugin {
 			}
 		}
 
-		return classes.filter(cls => cls.trim().length > 0);
+		return classes.filter(cls => typeof cls === 'string' && cls.trim().length > 0);
 	}
 
 	private checkCssClassChange(file: TFile) {
@@ -104,7 +100,6 @@ export default class CalcCraftPlugin extends Plugin {
 		}, 100); // Small delay to ensure frontmatter is fully processed
 	}
 
-
 	async postProcessor(el: HTMLElement, ctx: MarkdownPostProcessorContext) {
 		// Check if class filter is enabled
 		if (this.settings.enableClassFilter) {
@@ -136,32 +131,11 @@ export default class CalcCraftPlugin extends Plugin {
 					const fileCache = this.app.metadataCache.getFileCache(file);
 
 					if (fileCache && fileCache.frontmatter) {
-						const cssclass = fileCache.frontmatter.cssclass;
-						const cssclasses = fileCache.frontmatter.cssclasses;
-
-						let hasRequiredClass = false;
-
-						// Check cssclass field
-						if (cssclass) {
-							if (typeof cssclass === 'string') {
-								hasRequiredClass = cssclass.split(/\s+/).includes(requiredClass);
-							} else if (Array.isArray(cssclass)) {
-								hasRequiredClass = cssclass.includes(requiredClass);
-							}
-						}
-
-						// Check cssclasses field if not found yet
-						if (!hasRequiredClass && cssclasses) {
-							if (typeof cssclasses === 'string') {
-								hasRequiredClass = cssclasses.split(/\s+/).includes(requiredClass);
-							} else if (Array.isArray(cssclasses)) {
-								hasRequiredClass = cssclasses.includes(requiredClass);
-							}
-						}
+						const classes = this.extractCssClasses(fileCache.frontmatter);
+						const hasRequiredClass = classes.includes(requiredClass);
 
 						this.debug(`File: ${file.name}, Required: ${requiredClass}, Found: ${hasRequiredClass}`);
-						this.debug(`Mode: ${activeView?.getMode()}, cssclass: ${cssclass}, cssclasses: ${cssclasses}`);
-
+						this.debug(`Mode: ${activeView?.getMode()}, classes: ${classes.join(', ')}`);
 
 						if (!hasRequiredClass) {
 							this.debug(`Skipping page - missing cssclass '${requiredClass}'`);
@@ -178,81 +152,54 @@ export default class CalcCraftPlugin extends Plugin {
 			}
 		}
 
+		const tables = el.querySelectorAll("table");
+		if (tables.length === 0) return;
 
-		el.querySelectorAll("table").forEach((tableEl, index) => {
-			try {
-				this.removeLabels(tableEl);
+		// Ignore our own DOM writes in the Live Preview MutationObserver
+		this.safelyMutateDOM(() => {
+			tables.forEach((tableEl, index) => {
+				try {
+					this.clearTableHighlights(tableEl);
+					(tableEl as any).CalcCraft = { settings: this.settings };
 
-				this.clearTableHighlights(tableEl);
-				(tableEl as any).CalcCraft = { settings: this.settings };
+					if (this.settings.showLabels) {
+						this.addSimpleLabels(tableEl);
+					}
 
-                if (this.settings.showLabels) {
-                    this.addSimpleLabels(tableEl);
-                }
+					const gridData = this.extractTableGrid(tableEl);
+					const evaluator = new TableEvaluator();
+					const result = evaluator.evaluateTable(gridData, this.settings);
 
-				const gridData = this.extractTableGrid(tableEl);
-				const evaluator = new TableEvaluator();
-				const result = evaluator.evaluateTable(gridData, this.settings);
-
-				this.applyResultsToHTML(tableEl, result, gridData, evaluator);
-			} catch (error) {
-				console.error(`CalcCraft: Error processing table ${index}:`, error);
-				tableEl.setAttribute('data-calccraft-error', 'true');
-			}
+					this.applyResultsToHTML(tableEl, result, gridData, evaluator);
+				} catch (error) {
+					console.error(`CalcCraft: Error processing table ${index}:`, error);
+					tableEl.setAttribute('data-calccraft-error', 'true');
+				}
+			});
 		});
 	}
 
+	private extractTableGrid(tableEl: HTMLTableElement): string[][] {
+		const gridData: string[][] = [];
 
+		tableEl.querySelectorAll("tr").forEach((rowEl, i) => {
+			gridData[i] = [];
+			rowEl.querySelectorAll("td, th").forEach((cellEl, j) => {
+				const wrapper = cellEl.querySelector('.table-cell-wrapper');
+				const cellContent = wrapper ? wrapper.textContent : cellEl.textContent;
+				gridData[i][j] = (cellContent || "").trim();
+			});
+		});
 
-    private extractTableGrid(tableEl: HTMLTableElement): string[][] {
-        const rows = Array.from(tableEl.querySelectorAll("tr"));
-        if (rows.length === 0) return [];
-        
-        const validRows = rows.slice(this.rowOffset);
-        if (validRows.length === 0) return [];
-        
-        const gridData: string[][] = [];
-        
-        validRows.forEach((rowEl, i) => {
-            const cells = Array.from(rowEl.querySelectorAll("td, th"));
-            const validCells = cells.slice(this.colOffset);
-            gridData[i] = [];
-            
-            validCells.forEach((cellEl, j) => {
-                const wrapper = cellEl.querySelector('.table-cell-wrapper');
-                let cellContent = wrapper ? wrapper.textContent : cellEl.textContent;
-                cellContent = (cellContent || "").trim();
-                
-                // DEBUG: Log what we're extracting
-                if (cellContent.startsWith('=') || cellContent.startsWith("'=")) {
-                    //this.debug(`Extracting cell [${i},${j}]:`, cellContent);
-                }
-                
-                gridData[i][j] = cellContent;
-            });
-        });
-        
-        return gridData;
-    }
-
-
-
-
-
+		return gridData;
+	}
 
 	private applyResultsToHTML(tableEl: HTMLTableElement, result: any, gridData: string[][], evaluator: TableEvaluator) {
 		// Get HTML table structure
 		this.htmlTable = [];
-		const rows = Array.from(tableEl.querySelectorAll("tr")).slice(this.rowOffset);
-
-		rows.forEach((rowEl, i) => {
-			this.htmlTable[i] = [];
-			const cells = Array.from(rowEl.querySelectorAll("td, th")).slice(this.colOffset) as HTMLElement[];
-			cells.forEach((cellEl, j) => {
-				this.htmlTable[i][j] = cellEl as HTMLElement;
-			});
+		tableEl.querySelectorAll("tr").forEach((rowEl, i) => {
+			this.htmlTable[i] = Array.from(rowEl.querySelectorAll<HTMLElement>("td, th"));
 		});
-
 
 		// Apply computed values and styling
 		for (let rowIndex = 0; rowIndex < this.htmlTable.length; rowIndex++) {
@@ -290,15 +237,15 @@ export default class CalcCraftPlugin extends Plugin {
 
 				// Get parents from evaluator and convert to HTML elements
 				const parentCoords = evaluator.parents[rowIndex][colIndex];
-                parentCoords.forEach(([parentRow, parentCol]: [number, number]) => {  
+				parentCoords.forEach(([parentRow, parentCol]: [number, number]) => {
 					if (this.htmlTable[parentRow] && this.htmlTable[parentRow][parentCol]) {
 						(cellEl as any).CalcCraft.parents.push(this.htmlTable[parentRow][parentCol]);
 					}
 				});
 
-				// Get children from evaluator and convert to HTML elements  
+				// Get children from evaluator and convert to HTML elements
 				const childrenCoords = evaluator.children[rowIndex][colIndex];
-                childrenCoords.forEach(([childRow, childCol]: [number, number]) => {  
+				childrenCoords.forEach(([childRow, childCol]: [number, number]) => {
 					if (this.htmlTable[childRow] && this.htmlTable[childRow][childCol]) {
 						(cellEl as any).CalcCraft.children.push(this.htmlTable[childRow][childCol]);
 					}
@@ -315,8 +262,6 @@ export default class CalcCraftPlugin extends Plugin {
 					}
 					cellEl.setAttribute("title", cellContent);
 
-
-					// In applyResultsToHTML:
 					if (error) {
 						cellEl.classList.add("error-cell");
 						if (this.settings.formula_background_error_toggle) {
@@ -335,151 +280,133 @@ export default class CalcCraftPlugin extends Plugin {
 					}
 					this.setFormattedCellValue(cellEl, computedValue);
 				} else if (cellType === 4) { // escaped_text
-                    cellEl.classList.add("escaped-text-cell"); 
-                    
-                    const wrapper = cellEl.querySelector<HTMLElement>(".table-cell-wrapper");
-                    if (wrapper) {
-                        // Don't modify textContent - keep '=value
-                        wrapper.dataset.calcDisplay = String(computedValue); // =value (without ')
-                        wrapper.classList.add("calc-overlay-cell");
-                        cellEl.setAttribute("title", cellContent); // Shows '=value
-                    } else {
-                        // Reading view
-                        cellEl.textContent = String(computedValue);
-                    }
-                }
+					cellEl.classList.add("escaped-text-cell");
 
-
+					const wrapper = cellEl.querySelector<HTMLElement>(".table-cell-wrapper");
+					if (wrapper) {
+						// Don't modify textContent - keep '=value
+						wrapper.dataset.calcDisplay = String(computedValue); // =value (without ')
+						wrapper.classList.add("calc-overlay-cell");
+						cellEl.setAttribute("title", cellContent); // Shows '=value
+					} else {
+						// Reading view
+						cellEl.textContent = String(computedValue);
+					}
+				}
 			}
 		}
- 
+
 		this.addTableEventListeners(tableEl);
 	}
 
+	// Labels are rendered by CSS pseudo-elements from these data attributes (see styles.css)
+	private addSimpleLabels(tableEl: HTMLTableElement): void {
+		// Label the first row (column headers) - works for both th and td
+		const firstRow = tableEl.rows[0];
+		if (firstRow) {
+			Array.from(firstRow.cells).forEach((cell, colIndex) => {
+				if (!cell.dataset.colLabeled) {
+					cell.dataset.colLabeled = 'true';
+					cell.dataset.colLetter = String.fromCharCode(97 + colIndex); // 'a' + index
+				}
+			});
+		}
 
+		// Label ALL rows (both thead and tbody)
+		Array.from(tableEl.rows).forEach((row, rowIndex) => {
+			const firstCell = row.cells[0];
+			if (firstCell && !firstCell.dataset.rowLabeled) {
+				firstCell.dataset.rowLabeled = 'true';
+				firstCell.dataset.rowNumber = String(rowIndex + 1);
+			}
+		});
+	}
 
-    private addSimpleLabels(tableEl: HTMLTableElement): void {
-        // avoid running twice
-        if (tableEl.dataset.labelsAdded === 'true') return;
-        tableEl.dataset.labelsAdded = 'true';
+	private formatNumber(num: number): string {
+		let result: string;
 
-        // Label the first row (column headers) - works for both th and td
-        const firstRow = tableEl.rows[0];
-        if (firstRow) {
-            Array.from(firstRow.cells).forEach((cell, colIndex) => {
-                if (!cell.dataset.colLabeled) {
-                    cell.dataset.colLabeled = 'true';
-                    cell.dataset.colLetter = String.fromCharCode(97 + colIndex); // 'a' + index
-                    console.log(`Set column label '${cell.dataset.colLetter}' on cell:`, cell); // DEBUG
-                }
-            });
-        }
+		// Apply global precision
+		if (this.settings.precision >= 0) {
+			result = num.toFixed(this.settings.precision);
 
-        // Label ALL rows (both thead and tbody)
-        const allRows = Array.from(tableEl.rows);
-        allRows.forEach((row, rowIndex) => {
-            const firstCell = row.cells[0];
-            if (firstCell && !firstCell.dataset.rowLabeled) {
-                firstCell.dataset.rowLabeled = 'true';
-                firstCell.dataset.rowNumber = String(rowIndex + 1);
-            }
-        });
-    }
+			// Check if original number has more precision than displayed
+			const rounded = parseFloat(result);
+			const hasMorePrecision = rounded !== num;
 
+			if (hasMorePrecision) {
+				// Number was truncated, keep zeros to show precision limit
+				// e.g., "3.000" for 3.0002342
+			} else {
+				// Number is exact, remove trailing zeros
+				result = result.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+			}
+		} else {
+			result = num.toString();
+		}
 
+		return this.applySeparators(result);
+	}
 
+	private applySeparators(numString: string): string {
+		const parts = numString.split('.');
+		let integerPart = parts[0];
+		const decimalPart = parts[1];
 
+		if (this.settings.digitGrouping) {
+			integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, this.settings.groupingSeparator || ',');
+		}
 
-private formatNumber(num: number): string {
-    let result: string;
-    
-    // Apply global precision
-    if (this.settings.precision >= 0) {
-        result = num.toFixed(this.settings.precision);
-        
-        // Check if original number has more precision than displayed
-        const rounded = parseFloat(result);
-        const hasMorePrecision = rounded !== num;
-        
-        if (hasMorePrecision) {
-            // Number was truncated, keep zeros to show precision limit
-            // e.g., "3.000" for 3.0002342
-        } else {
-            // Number is exact, remove trailing zeros
-            result = result.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
-        }
-    } else {
-        result = num.toString();
-    }
-    
-    return this.applySeparators(result);
-}
+		const result = decimalPart !== undefined
+			? integerPart + (this.settings.decimalSeparator || '.') + decimalPart
+			: integerPart;
 
+		return result;
+	}
 
+	private setFormattedCellValue(cellEl: HTMLElement, value: any, error?: string): void {
+		let data = value;
 
-private applySeparators(numString: string): string {
-    const parts = numString.split('.');
-    let integerPart = parts[0];
-    const decimalPart = parts[1];
-    
-    if (this.settings.digitGrouping) {
-        integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, this.settings.groupingSeparator || ',');
-    }
-    
-    const result = decimalPart !== undefined 
-        ? integerPart + (this.settings.decimalSeparator || '.') + decimalPart
-        : integerPart;
-    
-    return result;
-}
+		// Handle mathjs Unit objects
+		if (typeof data === "object" && data !== null &&
+			(data.constructor?.name === "Unit" ||
+			(data.value !== undefined && data.units !== undefined))) {
+			const unitString = data.toString();
+			const unitMatch = unitString.match(/^(-?[\d.]+)\s*(.*)$/);
+			if (unitMatch) {
+				const [, numberPart, unitPart] = unitMatch;
+				const formatted = this.applySeparators(numberPart);
+				data = `${formatted} ${unitPart}`;
+			} else {
+				data = unitString;
+			}
+		}
+		// Handle numbers (NOT pre-formatted)
+		else if (typeof data === "number") {
+			data = this.formatNumber(data); // Applies global precision + separators
+		}
+		// Handle strings (from format() - already has precision applied)
+		else if (typeof data === "string") {
+			const numMatch = data.match(/^(-?\d*\.?\d+)$/);
+			if (numMatch) {
+				// String number from format() - ONLY apply separators, NO precision change
+				data = this.applySeparators(data);
+			} else {
+				const unitMatch = data.match(/^(-?\d*\.?\d+)\s*(.+)$/);
+				if (unitMatch) {
+					const [, numberPart, unitPart] = unitMatch;
+					data = this.applySeparators(numberPart) + ' ' + unitPart;
+				}
+			}
+		}
 
-private setFormattedCellValue(cellEl: HTMLElement, value: any, error?: string): void {
-    let data = value;
-    
-    // Handle mathjs Unit objects
-    if (typeof data === "object" && data !== null &&
-        (data.constructor?.name === "Unit" ||
-        (data.value !== undefined && data.units !== undefined))) {
-        const unitString = data.toString();
-        const unitMatch = unitString.match(/^(-?[\d\.]+)\s*(.*)$/);
-        if (unitMatch) {
-            const [, numberPart, unitPart] = unitMatch;
-            const formatted = this.applySeparators(numberPart);
-            data = `${formatted} ${unitPart}`;
-        } else {
-            data = unitString;
-        }
-    } 
-    // Handle numbers (NOT pre-formatted)
-    else if (typeof data === "number") {
-        data = this.formatNumber(data); // Applies global precision + separators
-    } 
-    // Handle strings (from format() - already has precision applied)
-    else if (typeof data === "string") {
-        const numMatch = data.match(/^(-?\d*\.?\d+)$/);
-        if (numMatch) {
-            // String number from format() - ONLY apply separators, NO precision change
-            data = this.applySeparators(data);
-        } else {
-            const unitMatch = data.match(/^(-?\d*\.?\d+)\s*(.+)$/);
-            if (unitMatch) {
-                const [, numberPart, unitPart] = unitMatch;
-                data = this.applySeparators(numberPart) + ' ' + unitPart;
-            }
-        }
-    }
-    
-    const wrapper = cellEl.querySelector<HTMLElement>('.table-cell-wrapper');
-    if (wrapper) {
-        wrapper.dataset.calcDisplay = error || String(data);
-        wrapper.classList.add('calc-overlay-cell');
-        return;
-    }
-    cellEl.textContent = error || String(data);
-}
-
-
-
+		const wrapper = cellEl.querySelector<HTMLElement>('.table-cell-wrapper');
+		if (wrapper) {
+			wrapper.dataset.calcDisplay = error || String(data);
+			wrapper.classList.add('calc-overlay-cell');
+			return;
+		}
+		cellEl.textContent = error || String(data);
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DefaultSettings, await this.loadData());
@@ -514,29 +441,21 @@ private setFormattedCellValue(cellEl: HTMLElement, value: any, error?: string): 
 			const cellEl = target.closest("td, th") as HTMLElement; // Get the closest cell element to the event target
 			if (!cellEl) return; // No cell? Get outta here.
 			cellEl.classList.add("cell-active");
-			if ((cellEl as any)?.CalcCraft == undefined) {
-				//console.log("the cell doesnt contain calccraft")
-				return;
-			}
+			if ((cellEl as any)?.CalcCraft == undefined) return;
 
-			//console.log(cellEl.classList)
 			if (
 				cellEl.classList.contains("formula-cell") ||
 				cellEl.classList.contains("matrix-cell")
 			) {
-				//console.log("adding some parents");
 				if ((tableEl as any).CalcCraft.settings.formula_background_parents_toggle) {
 					(cellEl as any).CalcCraft.parents.forEach((depCellEl: HTMLElement) => {
 						depCellEl.classList.add("cell-parents-highlight");
-						//console.log('we added some parents');
 					});
 				}
 			}
 			if ((tableEl as any).CalcCraft.settings.formula_background_children_toggle) {
-				//console.log("adding the children");
 				(cellEl as any).CalcCraft.children?.forEach((depCellEl: HTMLElement) => {
 					depCellEl.classList.add("cell-children-highlight");
-					//console.log('we added some children');
 				});
 			}
 		});
@@ -573,7 +492,6 @@ private setFormattedCellValue(cellEl: HTMLElement, value: any, error?: string): 
 		}
 	}
 
-	//private recomputeLivePreview = debounce(() => {
 	private scheduleRecompute = (delay = 40) => {
 		// simple debounce so many mutations collapse into one recompute
 		if (this.recomputeTimer) {
@@ -614,7 +532,6 @@ private setFormattedCellValue(cellEl: HTMLElement, value: any, error?: string): 
 			});
 		}
 	};
-	//} , 300, true);
 
 	private attachLivePreviewHooks = () => {
 		this.detachLivePreviewHooks();
@@ -638,13 +555,12 @@ private setFormattedCellValue(cellEl: HTMLElement, value: any, error?: string): 
 			}
 		};
 
-		// Remove the input listener that was causing issues
 		root.addEventListener("blur", onCellBlur, true);
 		this.lpCleanup.push(() => {
 			root.removeEventListener("blur", onCellBlur, true);
 		});
 
-		// Keep the mutation observer ggbut make it less aggressive
+		// Recompute on DOM changes (childList only, debounced)
 		const mo = new MutationObserver((mutations) => {
 			// if editing inside a table widget, do not recompute
 			const hasActiveEdit = root.querySelector('.cm-table-widget .table-cell-wrapper:focus-within');
@@ -660,14 +576,12 @@ private setFormattedCellValue(cellEl: HTMLElement, value: any, error?: string): 
 			// debounce and schedule recompute to collapse many mutations
 			this.scheduleRecompute();
 		});
-		//mo.observe(root, { childList: true, subtree: true, attributes: true, characterData: true });
 		mo.observe(root, { childList: true, subtree: true });
 		this.lpCleanup.push(() => mo.disconnect());
 
 		// Initial pass
 		this.recomputeLivePreview();
 	};
-
 
 	private clearTableHighlights(tableEl: HTMLTableElement) {
 		if (!tableEl) return;
@@ -698,55 +612,11 @@ private setFormattedCellValue(cellEl: HTMLElement, value: any, error?: string): 
 		});
 	}
 
-
 	private detachLivePreviewHooks = () => {
 		this.debug("Detaching Live Preview hooks");
 		this.lpCleanup.forEach(fn => fn());
 		this.lpCleanup = [];
 	};
-
-	createLabels(tableEl: HTMLTableElement) {
-
-		// Prevent multiple calls
-		if (tableEl.dataset.labelsAdded === 'true') {
-			return;
-		}
-		this.colOffset = 0;
-		this.rowOffset = 0;
-		tableEl.dataset.labelsAdded = 'true';
-
-		const rows = Array.from(tableEl.querySelectorAll("tr"));
-
-		// Create top row for column labels
-		const newRow = tableEl.insertRow(0);
-		const existingCells = Array.from(rows[0].querySelectorAll("td, th"));
-
-		// For the new top row
-		for (let i = 0; i <= existingCells.length; i++) {
-			const newCell = newRow.insertCell(i);
-			if (i > this.colOffset) {
-				newCell.textContent = String.fromCharCode(
-					"a".charCodeAt(0) + i - 1 - this.colOffset
-				);
-			}
-			newCell.classList.add("label-cell", "column");
-			(newCell as any).CalcCraft = { parents: [], children: [], settings: this.settings };
-		}
-
-		// For the new leftmost column in existing rows (skip the newly created row)
-		rows.forEach((row, index) => {
-			const newCell = row.insertCell(0);
-			if (index + 1 - this.rowOffset > 0) {
-				newCell.textContent = (index + 1 - this.rowOffset).toString();
-			}
-			newCell.classList.add("label-cell", "row");
-			(newCell as any).CalcCraft = { parents: [], children: [], settings: this.settings };
-		});
-
-		// Update offsets so grid extraction skips label cells
-		this.colOffset = 1;
-		this.rowOffset = 1; // Now we skip the top label row too
-	}
 
 	private safelyMutateDOM(fn: () => void) {
 		this.suspendMutations = true;
@@ -758,35 +628,4 @@ private setFormattedCellValue(cellEl: HTMLElement, value: any, error?: string): 
 			});
 		}
 	}
-
-	removeLabels(tableEl: HTMLTableElement) {
-		this.safelyMutateDOM(() => {
-
-			if (tableEl.dataset.labelsAdded !== 'true') {
-				return;
-			}
-
-			// Remove the top row (column labels)
-			const firstRow = tableEl.rows[0];
-			if (firstRow && firstRow.cells[0]?.classList.contains('label-cell')) {
-				firstRow.remove();
-			}
-
-			// Remove first cell from each remaining row (row labels)
-			Array.from(tableEl.rows).forEach(row => {
-				const firstCell = row.cells[0];
-				if (firstCell?.classList.contains('label-cell')) {
-					firstCell.remove();
-				}
-			});
-
-			delete tableEl.dataset.labelsAdded;
-
-			// Reset offsets
-			this.colOffset = 0;
-			this.rowOffset = 0;
-
-		})
-	}
-
 }

@@ -8,7 +8,7 @@ export const DefaultSettings = {
 	showBorders: true,
 	digitGrouping: false,
 	groupingSeparator: ",",
-    decimalSeparator: ".",
+	decimalSeparator: ".",
 	formula_background_error_toggle: true,
 	formula_background_parents_toggle: true,
 	formula_background_children_toggle: true,
@@ -34,7 +34,7 @@ export const DefaultSettings = {
 	formula_background_children_dark: "#5c5275",
 	formula_font_children_dark: "#dcffa8",
 	enableClassFilter: false,
-    requiredClass: "calccraft",
+	requiredClass: "calccraft",
 };
 
 export class CalcCraftSettingsTab extends PluginSettingTab {
@@ -69,51 +69,49 @@ export class CalcCraftSettingsTab extends PluginSettingTab {
 					})
 			);
 
-        new Setting(containerEl)
-          .setName("Enable digit grouping")
-          .setDesc("Add thousands separators to large numbers (e.g., 1,234.56)")
-          .addToggle(toggle =>
-            toggle.setValue(this.plugin.settings.digitGrouping).onChange(async value => {
-              this.plugin.settings.digitGrouping = value;
-              await this.plugin.saveSettings();
-              this.display(); // ← Refresh to show/hide grouping separator
-              this.reloadPages();
-            })
-          );
+		new Setting(containerEl)
+			.setName("Enable digit grouping")
+			.setDesc("Add thousands separators to large numbers (e.g., 1,234.56)")
+			.addToggle(toggle =>
+				toggle.setValue(this.plugin.settings.digitGrouping).onChange(async value => {
+					this.plugin.settings.digitGrouping = value;
+					await this.plugin.saveSettings();
+					this.display(); // Refresh to show/hide grouping separator
+					this.reloadPages();
+				})
+			);
 
-        // Only show grouping separator when digit grouping is enabled
-        if (this.plugin.settings.digitGrouping) {
-          new Setting(containerEl)
-            .setName("Grouping separator") 
-            .setDesc("Character for thousands separator (e.g., ',' for 1,234 or '.' for 1.234 or ' ' for 1 234)")
-            .addText(text =>
-              text
-                .setPlaceholder(",")
-                .setValue(this.plugin.settings.groupingSeparator)
-                .onChange(async value => {
-                  this.plugin.settings.groupingSeparator = value || ",";
-                  await this.plugin.saveSettings();
-                  this.reloadPages();
-                })
-            );
-        }
+		// Only show grouping separator when digit grouping is enabled
+		if (this.plugin.settings.digitGrouping) {
+			new Setting(containerEl)
+				.setName("Grouping separator")
+				.setDesc("Character for thousands separator (e.g., ',' for 1,234 or '.' for 1.234 or ' ' for 1 234)")
+				.addText(text =>
+					text
+						.setPlaceholder(",")
+						.setValue(this.plugin.settings.groupingSeparator)
+						.onChange(async value => {
+							this.plugin.settings.groupingSeparator = value || ",";
+							await this.plugin.saveSettings();
+							this.reloadPages();
+						})
+				);
+		}
 
-        // Always show decimal separator (used for both input and output)
-        new Setting(containerEl)
-          .setName("Decimal separator")
-          .setDesc("Character for decimal point (e.g., '.' for 3.14 or ',' for 3,14)")
-          .addText(text =>
-            text
-              .setPlaceholder(".")
-              .setValue(this.plugin.settings.decimalSeparator)
-              .onChange(async value => {
-                this.plugin.settings.decimalSeparator = value || ".";
-                await this.plugin.saveSettings();
-                this.reloadPages();
-              })
-          );
-
-
+		// Always show decimal separator (used for both input and output)
+		new Setting(containerEl)
+			.setName("Decimal separator")
+			.setDesc("Character for decimal point (e.g., '.' for 3.14 or ',' for 3,14)")
+			.addText(text =>
+				text
+					.setPlaceholder(".")
+					.setValue(this.plugin.settings.decimalSeparator)
+					.onChange(async value => {
+						this.plugin.settings.decimalSeparator = value || ".";
+						await this.plugin.saveSettings();
+						this.reloadPages();
+					})
+			);
 
 		new Setting(containerEl)
 			.setName("show labels")
@@ -133,57 +131,56 @@ export class CalcCraftSettingsTab extends PluginSettingTab {
 					this.plugin.settings.showBorders = value;
 					await this.plugin.saveSettings();
 					this.reloadPages();
-					//this.plugin.updatecssvars();
 				})
 			);
 
-    new Setting(containerEl)
-        .setName("Only process pages with specific cssclass")
-        .setDesc("When enabled, only pages with the specified cssclass in frontmatter will be processed")
-        .addToggle(toggle =>
-            toggle.setValue(this.plugin.settings.enableClassFilter).onChange(async value => {
-                this.plugin.settings.enableClassFilter = value;
-                await this.plugin.saveSettings();
-                this.display(); // Refresh to show/hide class input
-                this.reloadPages();
-            })
-        );
+		new Setting(containerEl)
+			.setName("Only process pages with specific cssclass")
+			.setDesc("When enabled, only pages with the specified cssclass in frontmatter will be processed")
+			.addToggle(toggle =>
+				toggle.setValue(this.plugin.settings.enableClassFilter).onChange(async value => {
+					this.plugin.settings.enableClassFilter = value;
+					await this.plugin.saveSettings();
+					this.display(); // Refresh to show/hide class input
+					this.reloadPages();
+				})
+			);
 
-    // Only show class input when filter is enabled
-if (this.plugin.settings.enableClassFilter) {
-    new Setting(containerEl)
-        .setName("Required cssclass")
-        .setDesc("Pages must have this cssclass in frontmatter to be processed")
-        .addText(text => {
-            text
-                .setPlaceholder("calccraft")
-                .setValue(this.plugin.settings.requiredClass)
-                .onChange(async value => {
-                    // Save setting immediately but don't reload
-                    this.plugin.settings.requiredClass = value || "calccraft";
-                    await this.plugin.saveSettings();
-                });
-            
-            // Only reload pages when user finishes editing
-            text.inputEl.addEventListener('blur', () => {
-                this.reloadPages();
-            });
-        });
-}else {
-        // Show disabled input when filter is off
-        new Setting(containerEl)
-            .setName("Required cssclass")
-            .setDesc("Pages must have this cssclass in frontmatter to be processed (disabled)")
-            .addText(text => {
-                text
-                    .setPlaceholder("calccraft")
-                    .setValue(this.plugin.settings.requiredClass)
-                    .setDisabled(true);
-                // Make it visually grayed out
-                text.inputEl.style.opacity = "0.5";
-                text.inputEl.style.backgroundColor = "#f5f5f5";
-            });
-    }
+		// Only enable class input when filter is enabled
+		if (this.plugin.settings.enableClassFilter) {
+			new Setting(containerEl)
+				.setName("Required cssclass")
+				.setDesc("Pages must have this cssclass in frontmatter to be processed")
+				.addText(text => {
+					text
+						.setPlaceholder("calccraft")
+						.setValue(this.plugin.settings.requiredClass)
+						.onChange(async value => {
+							// Save setting immediately but don't reload
+							this.plugin.settings.requiredClass = value || "calccraft";
+							await this.plugin.saveSettings();
+						});
+
+					// Only reload pages when user finishes editing
+					text.inputEl.addEventListener('blur', () => {
+						this.reloadPages();
+					});
+				});
+		} else {
+			// Show disabled input when filter is off
+			new Setting(containerEl)
+				.setName("Required cssclass")
+				.setDesc("Pages must have this cssclass in frontmatter to be processed (disabled)")
+				.addText(text => {
+					text
+						.setPlaceholder("calccraft")
+						.setValue(this.plugin.settings.requiredClass)
+						.setDisabled(true);
+					// Make it visually grayed out
+					text.inputEl.style.opacity = "0.5";
+					text.inputEl.style.backgroundColor = "#f5f5f5";
+				});
+		}
 
 		const themes = ["light", "dark"];
 
@@ -226,7 +223,7 @@ if (this.plugin.settings.enableClassFilter) {
 			this.createColorpicker_fg_bg(
 				containerEl,
 				"matrix cell color",
-				"[light theme]",
+				"cells filled by an array formula",
 				`formula_font_matrix_${theme}`,
 				`formula_background_matrix_${theme}`
 			);
@@ -306,7 +303,6 @@ if (this.plugin.settings.enableClassFilter) {
 				el.onchange = () => {
 					this.plugin.settings[variable] = el.value;
 					this.plugin.saveSettings();
-					//this.plugin.updatecssvars();
 					document.documentElement.style.setProperty(
 						"--CalcCraft_" + variable,
 						this.plugin.settings[variable]
