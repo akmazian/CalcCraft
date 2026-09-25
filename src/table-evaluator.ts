@@ -2,7 +2,7 @@
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: scientific notation in cells and formulas, whitespace digit grouping,
 // grouping-separator fix, uppercase references, rows numbered after the header,
-// quoted quantities (="5 mL" * 3), molar unit M, µ/μ micro prefix, dead code removed.
+// quoted quantities (="5 mL" * 3), format()/scientific() for units, molar unit M, µ/μ micro prefix, dead code removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { create, all } from 'mathjs';
@@ -11,38 +11,47 @@ const debug = false;
 
 const math = create(all);
 
+// Fixed decimals. Trailing zeros are kept only when the value was rounded, to show
+// the precision limit: with 3 decimals, 3.00005 -> "3.000" but 3 -> "3"
+export function formatFixed(value: number, precision: number): string {
+    if (!(precision >= 0)) return value.toString();
+    const formatted = value.toFixed(precision);
+    if (parseFloat(formatted) !== value) return formatted;
+    return formatted.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+}
+
+function formatScientific(value: number, precision: number): string {
+    // Use toExponential for scientific notation, dropping trailing zeros
+    return value
+        .toExponential(precision)
+        .replace(/(\.\d*?)0+(e[+-]?\d+)$/, '$1$2')
+        .replace(/\.(e[+-]?\d+)$/, '$1');
+}
+
+// A mathjs Unit as [number, unit], using the unit mathjs displays (best prefix),
+// e.g. 953.13 µL -> [953.13, "µL"]; null for a valueless unit such as unit("cm")
+export function splitUnit(unit: any): [number, string] | null {
+    const match = unit.toString().match(/^(-?\d*\.?\d+(?:e[+-]?\d+)?)\s*(.*)$/);
+    return match ? [Number(match[1]), match[2]] : null;
+}
+
+// Apply a number formatter to a plain number or to the number part of a Unit
+function formatValue(value: any, formatNumber: (n: number) => string): string {
+    if (typeof value === 'number') return formatNumber(value);
+    if (math.isUnit(value)) {
+        const parts = splitUnit(value);
+        if (parts) return `${formatNumber(parts[0])} ${parts[1]}`;
+    }
+    return String(value);
+}
+
 // Custom format(), scientific() and a unit-aware sum() that skips empty cells
 math.import({
-    format: function(value: any, precision: number) {
-        if (typeof value === 'number') {
-            if (precision >= 0) {
-                // Cap precision at 15 (realistic for JavaScript doubles)
-                const cappedPrecision = Math.min(precision, 15);
-                const formatted = value.toFixed(cappedPrecision);
-                
-                const rounded = parseFloat(formatted);
-                const hasMorePrecision = rounded !== value;
-                
-                if (hasMorePrecision) {
-                    return formatted;
-                } else {
-                    return formatted.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
-                }
-            }
-            return value.toString();
-        }
-        return String(value);
-    },
-    scientific: function(value: any, precision = 2) {
-        if (typeof value === 'number') {
-            // Use toExponential for scientific notation
-            const formatted = value.toExponential(precision);
-            
-            // Optionally remove trailing zeros
-            return formatted.replace(/(\.\d*?)0+(e[+-]?\d+)$/, '$1$2').replace(/\.(e[+-]?\d+)$/, '$1');
-        }
-        return String(value);
-    },
+    // Cap precision at 15 (realistic for JavaScript doubles)
+    format: (value: any, precision: number) =>
+        formatValue(value, n => formatFixed(n, Math.min(precision, 15))),
+    scientific: (value: any, precision = 2) =>
+        formatValue(value, n => formatScientific(n, precision)),
     sum: function(...args: any[]) {
         // Flatten arguments
         const flattened = args.flat(Infinity);

@@ -6,7 +6,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { TableEvaluator } from "../src/table-evaluator";
+import { TableEvaluator, formatFixed, splitUnit } from "../src/table-evaluator";
 
 const LOCALE = { decimalSeparator: ".", groupingSeparator: "," };
 
@@ -454,5 +454,45 @@ describe("micro prefix and molar units", () => {
 		assertUnit(values[1][4], 12.5, "uL");
 		assertUnit(values[2][4], 500, "uL");
 		assertUnit(values[3][4], 500, "uL");
+	});
+});
+
+describe("precision for numbers and units", () => {
+	test("formatFixed keeps zeros only when the value was rounded", () => {
+		assert.equal(formatFixed(3.00005, 3), "3.000");
+		assert.equal(formatFixed(3, 3), "3");
+		assert.equal(formatFixed(953.1343824165767, 2), "953.13");
+		assert.equal(formatFixed(1 / 3, -1), String(1 / 3));
+		assert.equal(formatFixed(1 / 3, undefined as any), String(1 / 3));
+	});
+
+	test("splitUnit uses the unit mathjs displays", () => {
+		const { values } = run([["a", "b"], ["1 mg", "=A1 / (1049.17 g/mol) / (1000 µM) to µL"]]);
+		const parts = splitUnit(values[1][1]);
+		assert.ok(parts);
+		assert.ok(Math.abs(parts[0] - 953.1343824165767) < 1e-9);
+		assert.equal(parts[1], "µL");
+	});
+
+	test("format() on a unit: =format(A1 to µL, 2) -> 953.13 µL", () => {
+		const { values } = run([["a", "b"], ["1 mg", "=format(A1 / (1049.17 g/mol) / (1000 µM) to µL, 2)"]]);
+		assert.equal(values[1][1], "953.13 µL");
+	});
+
+	test("format() on a unit keeps zeros when rounded: 5.25 mL at 3 decimals", () => {
+		const { values } = run([["a"], ['=format("5.25 mL", 3)'], ['=format("5.2501 mL", 3)']]);
+		assert.equal(values[1][0], "5.25 mL");
+		assert.equal(values[2][0], "5.250 mL");
+	});
+
+	test("scientific() on a unit, with and without a fixed unit", () => {
+		const { values } = run([["a"], ['=scientific("180000 mL" to mL, 2)'], ['=scientific("180000 mL", 2)']]);
+		assert.equal(values[1][0], "1.8e+5 mL");
+		assert.equal(values[2][0], "1.8e+2 L"); // mathjs picks the prefix unless fixed with "to"
+	});
+
+	test("format() and scientific() on numbers are unchanged", () => {
+		const { values } = run([["a"], ["=format(1/3, 5)"], ["=format(2, 3)"], ["=format(1/3, 99)"], ["=scientific(123456789, 3)"]]);
+		assert.deepEqual(values.slice(1).map(r => r[0]), ["0.33333", "2", (1 / 3).toFixed(15), "1.235e+8"]);
 	});
 });

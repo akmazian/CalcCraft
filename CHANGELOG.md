@@ -24,11 +24,13 @@ Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github
 
 ### Added
 - Quoted quantities in formulas: `="5 mL" * 3` gives `15 mL`
+- **Precision for units**: the decimal-places setting now applies to unit results (`953.1343824165767 µL` → `953.13 µL` at 2 decimals), and `format()` / `scientific()` accept units: `=format(D1 to µL, 1)` → `953.1 µL`. As before, `format()` takes precedence over the setting
 - **Table Master compatibility in reading view**: Table Master rebuilds every table from the markdown source after CalcCraft has computed it, which left the raw formulas visible. CalcCraft now recomputes a table once Table Master marks it rendered (`data-tm-rendered`), and places cells by Table Master's recorded positions (`data-tm-row` / `data-tm-col`) so merged cells don't shift column letters
 - Molar unit `M` with prefixes (`mM`, `µM`, `nM`), defined as `1 mol/L`
 - `µ` (micro sign, Option-M on a Mac) and `μ` (Greek mu) work as the micro prefix, like `u`: `12.5 µL`, `25 μM`. Previously a cell like `1000 µM` was silently read as the bare number `1000`
 
 ### Fixed
+- `scientific()` results were displayed with a space before the exponent (`1.235 e+8`)
 - Scientific notation in a referenced cell (`1.8e5`, `2e-3 M`) was read as the number `1.8` with the unit `e5`, so formulas referencing it failed
 - Scientific notation typed into a formula (`=2*1.8e5`) was split up and `e5` treated as a cell reference; decimals in formulas are now kept whole
 - Spaces as thousands separators (`1 000`) were silently read as `1`; whitespace between two digits is now ignored (`5 mL` and `3 e5` are unaffected)

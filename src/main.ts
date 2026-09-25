@@ -1,13 +1,13 @@
 // Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: Table Master compatibility (recompute after its rebuild, merged-cell
-// positions), header-row detection, uppercase labels numbered from the first row
+// positions), precision setting for unit results, header-row detection, uppercase labels numbered from the first row
 // after the header, dead label code and debug logging removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { Plugin, MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
 import { CalcCraftSettingsTab, DefaultSettings } from "./settings";
-import { TableEvaluator } from "./table-evaluator";
+import { TableEvaluator, formatFixed, splitUnit } from "./table-evaluator";
 
 const debug = false;
 
@@ -378,29 +378,9 @@ export default class CalcCraftPlugin extends Plugin {
 		});
 	}
 
+	// Apply the global precision setting and separators
 	private formatNumber(num: number): string {
-		let result: string;
-
-		// Apply global precision
-		if (this.settings.precision >= 0) {
-			result = num.toFixed(this.settings.precision);
-
-			// Check if original number has more precision than displayed
-			const rounded = parseFloat(result);
-			const hasMorePrecision = rounded !== num;
-
-			if (hasMorePrecision) {
-				// Number was truncated, keep zeros to show precision limit
-				// e.g., "3.000" for 3.0002342
-			} else {
-				// Number is exact, remove trailing zeros
-				result = result.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
-			}
-		} else {
-			result = num.toString();
-		}
-
-		return this.applySeparators(result);
+		return this.applySeparators(formatFixed(num, this.settings.precision));
 	}
 
 	private applySeparators(numString: string): string {
@@ -426,15 +406,9 @@ export default class CalcCraftPlugin extends Plugin {
 		if (typeof data === "object" && data !== null &&
 			(data.constructor?.name === "Unit" ||
 			(data.value !== undefined && data.units !== undefined))) {
-			const unitString = data.toString();
-			const unitMatch = unitString.match(/^(-?[\d.]+)\s*(.*)$/);
-			if (unitMatch) {
-				const [, numberPart, unitPart] = unitMatch;
-				const formatted = this.applySeparators(numberPart);
-				data = `${formatted} ${unitPart}`;
-			} else {
-				data = unitString;
-			}
+			// Applies global precision + separators to the number part
+			const parts = splitUnit(data);
+			data = parts ? `${this.formatNumber(parts[0])} ${parts[1]}` : data.toString();
 		}
 		// Handle numbers (NOT pre-formatted)
 		else if (typeof data === "number") {
@@ -442,12 +416,12 @@ export default class CalcCraftPlugin extends Plugin {
 		}
 		// Handle strings (from format() - already has precision applied)
 		else if (typeof data === "string") {
-			const numMatch = data.match(/^(-?\d*\.?\d+)$/);
+			const numMatch = data.match(/^(-?\d*\.?\d+(?:e[+-]?\d+)?)$/);
 			if (numMatch) {
 				// String number from format() - ONLY apply separators, NO precision change
 				data = this.applySeparators(data);
 			} else {
-				const unitMatch = data.match(/^(-?\d*\.?\d+)\s*(.+)$/);
+				const unitMatch = data.match(/^(-?\d*\.?\d+(?:e[+-]?\d+)?)\s*(.+)$/);
 				if (unitMatch) {
 					const [, numberPart, unitPart] = unitMatch;
 					data = this.applySeparators(numberPart) + ' ' + unitPart;
