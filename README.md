@@ -10,6 +10,7 @@ Changes (see [CHANGELOG.md](CHANGELOG.md) for details):
 - References are uppercase (`A1`, `B2:C4`), and row 1 is the first row after the header. **Existing formulas need updating**, e.g. `=c2*d2` becomes `=C1*D1`
 - Quoted quantities work in formulas: `="5 mL" * 3` gives `15 mL`
 - Molar unit `M` (`mM`, `µM`, …) and `µ`/`μ` as the micro prefix
+- Works with [Table Master](https://github.com/moranrs/table-master) in reading view, including merged cells and multiple header rows
 - Test suite (`npm test`) and code cleanup
 
 ## Short Info

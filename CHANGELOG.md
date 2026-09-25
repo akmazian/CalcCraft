@@ -24,6 +24,7 @@ Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github
 
 ### Added
 - Quoted quantities in formulas: `="5 mL" * 3` gives `15 mL`
+- **Table Master compatibility in reading view**: Table Master rebuilds every table from the markdown source after CalcCraft has computed it, which left the raw formulas visible. CalcCraft now recomputes a table once Table Master marks it rendered (`data-tm-rendered`), and places cells by Table Master's recorded positions (`data-tm-row` / `data-tm-col`) so merged cells don't shift column letters
 - Molar unit `M` with prefixes (`mM`, `µM`, `nM`), defined as `1 mol/L`
 - `µ` (micro sign, Option-M on a Mac) and `μ` (Greek mu) work as the micro prefix, like `u`: `12.5 µL`, `25 μM`. Previously a cell like `1000 µM` was silently read as the bare number `1000`
 

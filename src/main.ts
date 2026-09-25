@@ -1,6 +1,7 @@
 // Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
-// Changes: header-row detection, uppercase labels numbered from the first row
+// Changes: Table Master compatibility (recompute after its rebuild, merged-cell
+// positions), header-row detection, uppercase labels numbered from the first row
 // after the header, dead label code and debug logging removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
@@ -22,6 +23,8 @@ export default class CalcCraftPlugin extends Plugin {
 	private lpCleanup: Array<() => void> = [];
 
 	private cssClassCache = new Map<string, string[]>();
+
+	private unloaded = false;
 
 	async onload() {
 		await this.loadSettings();
@@ -46,6 +49,11 @@ export default class CalcCraftPlugin extends Plugin {
 				}
 			})
 		);
+	}
+
+	onunload() {
+		// Table Master observers stay attached to rendered tables; make them no-ops
+		this.unloaded = true;
 	}
 
 	private extractCssClasses(frontmatter: any): string[] {
@@ -163,56 +171,88 @@ export default class CalcCraftPlugin extends Plugin {
 
 		// Ignore our own DOM writes in the Live Preview MutationObserver
 		this.safelyMutateDOM(() => {
-			tables.forEach((tableEl, index) => {
-				try {
-					this.clearTableHighlights(tableEl);
-					(tableEl as any).CalcCraft = { settings: this.settings };
-
-					const headerRows = this.countHeaderRows(tableEl);
-
-					if (this.settings.showLabels) {
-						this.addSimpleLabels(tableEl, headerRows);
-					}
-
-					const gridData = this.extractTableGrid(tableEl);
-					const evaluator = new TableEvaluator();
-					const result = evaluator.evaluateTable(gridData, { ...this.settings, headerRows });
-
-					this.applyResultsToHTML(tableEl, result, gridData, evaluator);
-				} catch (error) {
-					console.error(`CalcCraft: Error processing table ${index}:`, error);
-					tableEl.setAttribute('data-calccraft-error', 'true');
-				}
+			tables.forEach(tableEl => {
+				this.processTable(tableEl);
+				this.watchTableMaster(tableEl);
 			});
 		});
 	}
 
-	private extractTableGrid(tableEl: HTMLTableElement): string[][] {
-		const gridData: string[][] = [];
+	private processTable(tableEl: HTMLTableElement) {
+		try {
+			this.clearTableHighlights(tableEl);
+			(tableEl as any).CalcCraft = { settings: this.settings };
 
-		tableEl.querySelectorAll("tr").forEach((rowEl, i) => {
-			gridData[i] = [];
-			rowEl.querySelectorAll("td, th").forEach((cellEl, j) => {
+			const cells = this.tableCells(tableEl);
+			const headerRows = this.countHeaderRows(tableEl);
+
+			if (this.settings.showLabels) {
+				this.addSimpleLabels(cells, headerRows);
+			}
+
+			const gridData = this.extractTableGrid(cells);
+			const evaluator = new TableEvaluator();
+			const result = evaluator.evaluateTable(gridData, { ...this.settings, headerRows });
+
+			this.applyResultsToHTML(tableEl, cells, result, gridData, evaluator);
+		} catch (error) {
+			console.error("CalcCraft: Error processing table:", error);
+			tableEl.setAttribute('data-calccraft-error', 'true');
+		}
+	}
+
+	// Table Master rebuilds tables in reading view (asynchronously, from the markdown
+	// source) and marks the finished table with data-tm-rendered. Its rebuild replaces
+	// our computed values, so recompute the table when that marker is set.
+	private watchTableMaster(tableEl: HTMLTableElement) {
+		if ((tableEl as any).calcCraftTableMasterObserver) return;
+		const observer = new MutationObserver(() => {
+			if (this.unloaded) return;
+			this.safelyMutateDOM(() => this.processTable(tableEl));
+		});
+		observer.observe(tableEl, { attributes: true, attributeFilter: ["data-tm-rendered"] });
+		(tableEl as any).calcCraftTableMasterObserver = observer;
+	}
+
+	// Cell elements by grid position, padded to a rectangle (undefined where there is no
+	// element). Table Master's reading view leaves out cells covered by a merge and records
+	// each cell's real position in data-tm-row / data-tm-col, so use that when present.
+	private tableCells(tableEl: HTMLTableElement): (HTMLElement | undefined)[][] {
+		const cells: HTMLElement[][] = [];
+		Array.from(tableEl.rows).forEach((rowEl, i) => {
+			cells[i] = cells[i] || [];
+			Array.from(rowEl.cells).forEach((cellEl, j) => {
+				const row = cellEl.dataset.tmRow !== undefined ? Number(cellEl.dataset.tmRow) : i;
+				const col = cellEl.dataset.tmCol !== undefined ? Number(cellEl.dataset.tmCol) : j;
+				cells[row] = cells[row] || [];
+				cells[row][col] = cellEl;
+			});
+		});
+		const cols = Math.max(0, ...cells.map(row => (row ? row.length : 0)));
+		return Array.from({ length: cells.length }, (_, i) =>
+			Array.from({ length: cols }, (_, j) => cells[i]?.[j])
+		);
+	}
+
+	private extractTableGrid(cells: (HTMLElement | undefined)[][]): string[][] {
+		return cells.map(row =>
+			row.map(cellEl => {
+				if (!cellEl) return "";
 				const wrapper = cellEl.querySelector('.table-cell-wrapper');
 				const cellContent = wrapper ? wrapper.textContent : cellEl.textContent;
-				gridData[i][j] = (cellContent || "").trim();
-			});
-		});
-
-		return gridData;
+				return (cellContent || "").trim();
+			})
+		);
 	}
 
-	private applyResultsToHTML(tableEl: HTMLTableElement, result: any, gridData: string[][], evaluator: TableEvaluator) {
-		// Get HTML table structure
-		this.htmlTable = [];
-		tableEl.querySelectorAll("tr").forEach((rowEl, i) => {
-			this.htmlTable[i] = Array.from(rowEl.querySelectorAll<HTMLElement>("td, th"));
-		});
+	private applyResultsToHTML(tableEl: HTMLTableElement, cells: (HTMLElement | undefined)[][], result: any, gridData: string[][], evaluator: TableEvaluator) {
+		this.htmlTable = cells as HTMLElement[][];
 
 		// Apply computed values and styling
 		for (let rowIndex = 0; rowIndex < this.htmlTable.length; rowIndex++) {
 			for (let colIndex = 0; colIndex < this.htmlTable[rowIndex].length; colIndex++) {
 				const cellEl = this.htmlTable[rowIndex][colIndex];
+				if (!cellEl) continue; // covered by a merged cell
 				const cellContent = gridData[rowIndex]?.[colIndex] || "";
 				const computedValue = result.values[rowIndex]?.[colIndex];
 				const error = result.errors[rowIndex]?.[colIndex];
@@ -320,18 +360,15 @@ export default class CalcCraftPlugin extends Plugin {
 	}
 
 	// Labels are rendered by CSS pseudo-elements from these data attributes (see styles.css)
-	private addSimpleLabels(tableEl: HTMLTableElement, headerRows: number): void {
+	private addSimpleLabels(cells: (HTMLElement | undefined)[][], headerRows: number): void {
 		// Column letters on the first row
-		const firstRow = tableEl.rows[0];
-		if (firstRow) {
-			Array.from(firstRow.cells).forEach((cell, colIndex) => {
-				cell.dataset.colLetter = String.fromCharCode(65 + colIndex); // 'A' + index
-			});
-		}
+		(cells[0] || []).forEach((cell, colIndex) => {
+			if (cell) cell.dataset.colLetter = String.fromCharCode(65 + colIndex); // 'A' + index
+		});
 
 		// Row numbers start at 1 on the first row after the header
-		Array.from(tableEl.rows).forEach((row, rowIndex) => {
-			const firstCell = row.cells[0];
+		cells.forEach((row, rowIndex) => {
+			const firstCell = row[0];
 			if (!firstCell) return;
 			if (rowIndex < headerRows) {
 				delete firstCell.dataset.rowNumber;
