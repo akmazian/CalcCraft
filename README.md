@@ -9,6 +9,7 @@ Changes (see [CHANGELOG.md](CHANGELOG.md) for details):
 - Spaces between digits are ignored (`1 000` is 1000), and the `.` grouping separator is fixed
 - References are uppercase (`A1`, `B2:C4`), and row 1 is the first row after the header. **Existing formulas need updating**, e.g. `=c2*d2` becomes `=C1*D1`
 - Quoted quantities work in formulas: `="5 mL" * 3` gives `15 mL`
+- Molar unit `M` (`mM`, `µM`, …) and `µ`/`μ` as the micro prefix
 - Test suite (`npm test`) and code cleanup
 
 ## Short Info
@@ -52,6 +53,7 @@ Formulas are evaluated using [mathjs](https://mathjs.org/docs/reference/function
 - **Native unit parsing**: `5 kg`,  `25 celsius`, `12 inch`
 - **Scientific notation**: `1.8e5`, `2e-3 M` in cells and `=2*1.8e5` in formulas
 - **Quoted quantities**: `="5 mL" * 3` gives `15 mL`
+- **Lab units**: molar `M` (`mM`, `µM`, `nM`), and `µ` or `μ` as the micro prefix (`12.5 µL`), e.g. `=D1 / (C1 g/mol) / B1 to µL`
 - **Unit arithmetic**: `=5 kg + 3000 g` automatically converts and returns `8 kg`
 - **Unit conversion**: `=5 inch to cm` converts between unit systems
 - **Matrix operations with units**: Full support for unit calculations in ranges and matrices

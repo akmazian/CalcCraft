@@ -407,3 +407,52 @@ describe("quoted quantities in formulas", () => {
 		assert.equal(run([["h"], ['="3 e5"']]).values[1][0], "3 e5");
 	});
 });
+
+describe("micro prefix and molar units", () => {
+	test("µ (micro sign) and μ (Greek mu) cells keep their unit", () => {
+		assert.equal(written("1000 µM"), "1000 µM");
+		assert.equal(written("12.5 μL"), "12.5 μL");
+		assert.equal(written("10 mM"), "10 mM");
+	});
+
+	test("text starting with a µ quantity is no longer read as a bare number", () => {
+		assert.notEqual(written("34 µL P3000 + 391 µL OptiMEM"), "34");
+	});
+
+	test("5 mL + 250 µL -> 5.25 mL", () => {
+		assertUnit(run([["a", "b", "c"], ["5 mL", "250 µL", "=A1+B1"]]).values[1][2], 5.25, "mL");
+	});
+
+	test("Greek mu converts like u: 12.5 μL to uL", () => {
+		assertUnit(run([["a", "b"], ["12.5 μL", "=A1 to uL"]]).values[1][1], 12.5, "uL");
+	});
+
+	test("molar: 1000 µM to mM, 2e-3 M to mM", () => {
+		const { values } = run([["a", "b"], ["1000 µM", "=A1 to mM"], ["2e-3 M", "=A2 to mM"]]);
+		assertUnit(values[1][1], 1, "mM");
+		assertUnit(values[2][1], 2, "mM");
+	});
+
+	test('quoted: ="25 µM" * 2 -> 50 µM', () => {
+		assertUnit(run([["h"], ['="25 µM" * 2']]).values[1][0], 50, "uM");
+	});
+
+	test("F4: V DMSO = Weight / MW / C gives 953 µL and 4980 µL", () => {
+		const grid = md(F4);
+		for (let r = 1; r <= 2; r++) grid[r][4] = `=D${r} / (C${r} g/mol) / B${r} to µL`;
+		const { values, errors } = run(grid);
+		assert.equal(errors[1][4], null);
+		assertUnit(values[1][4], 1 / 1049.17 / 1000e-6 * 1e3, "uL"); // 953.13 µL
+		assertUnit(values[2][4], 5 / 401.46 / 2500e-6 * 1e3, "uL"); // 4981.8 µL
+	});
+
+	test("F5: V stock = V 1000x * C 1000x / C stock gives 12.5, 500, 500 µL", () => {
+		const grid = md(F5);
+		for (let r = 1; r <= 3; r++) grid[r][4] = `=B${r} * C${r} / D${r} to µL`;
+		const { values, errors } = run(grid);
+		assert.deepEqual([errors[1][4], errors[2][4], errors[3][4]], [null, null, null]);
+		assertUnit(values[1][4], 12.5, "uL");
+		assertUnit(values[2][4], 500, "uL");
+		assertUnit(values[3][4], 500, "uL");
+	});
+});

@@ -2,7 +2,7 @@
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: scientific notation in cells and formulas, whitespace digit grouping,
 // grouping-separator fix, uppercase references, rows numbered after the header,
-// quoted quantities (="5 mL" * 3), dead code removed.
+// quoted quantities (="5 mL" * 3), molar unit M, µ/μ micro prefix, dead code removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { create, all } from 'mathjs';
@@ -71,6 +71,21 @@ math.import({
         }
     }
 }, { override: true });
+
+// Micro sign (µ, U+00B5, typed with Option-M on a Mac) and Greek mu (μ, U+03BC)
+// work like the "u" micro prefix: 12.5 µL, 25 μM
+const MICRO = ["\u00B5", "\u03BC"];
+const isAlpha = math.parse.isAlpha;
+math.parse.isAlpha = (c: string, cPrev: string, cNext: string) => isAlpha(c, cPrev, cNext) || MICRO.includes(c);
+const Unit = (math as any).Unit;
+const isValidAlpha = Unit.isValidAlpha;
+Unit.isValidAlpha = (c: string) => isValidAlpha(c) || MICRO.includes(c);
+for (const prefixes of Object.values(Unit.PREFIXES) as any[]) {
+    if (prefixes.u) MICRO.forEach(m => (prefixes[m] = { ...prefixes.u, name: m }));
+}
+
+// Molar concentration, with prefixes: M, mM, µM, nM
+math.createUnit("M", { definition: "1 mol/L", prefixes: "short" });
 
 enum celltype {
     number = 1,
@@ -314,7 +329,7 @@ export class TableEvaluator {
         }
 
         // The exponent must follow a digit, so "1.8e5" is a number but "3 e5" stays a (bad) unit
-        const unitMatch = cellContent.trim().match(/^(-?[\d,.\s]*\d(?:[eE][+-]?\d+)?)\s*([a-zA-Z]+.*)?$/);
+        const unitMatch = cellContent.trim().match(/^(-?[\d,.\s]*\d(?:[eE][+-]?\d+)?)\s*([a-zA-Zµμ]+.*)?$/);
         if (unitMatch) {
             const [, numberPart, unitPart] = unitMatch;
             const value = this.parseLocaleNumber(numberPart);
