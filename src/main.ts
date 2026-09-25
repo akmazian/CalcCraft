@@ -1,13 +1,13 @@
 // Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: Table Master compatibility (recompute after its rebuild, merged-cell
-// positions), precision setting for unit results, header-row detection, uppercase labels numbered from the first row
+// positions), precision setting for unit results, scientific display of results, header-row detection, uppercase labels numbered from the first row
 // after the header, dead label code and debug logging removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { Plugin, MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
 import { CalcCraftSettingsTab, DefaultSettings } from "./settings";
-import { TableEvaluator, formatFixed, splitUnit } from "./table-evaluator";
+import { TableEvaluator, formatExponential, formatFixed, splitUnit } from "./table-evaluator";
 
 const debug = false;
 
@@ -257,6 +257,7 @@ export default class CalcCraftPlugin extends Plugin {
 				const computedValue = result.values[rowIndex]?.[colIndex];
 				const error = result.errors[rowIndex]?.[colIndex];
 				const cellType = result.cellTypes[rowIndex]?.[colIndex];
+				const scientific = result.scientific[rowIndex]?.[colIndex] || false;
 
 				// Clear all previous styling classes
 				cellEl.classList.remove(
@@ -316,9 +317,9 @@ export default class CalcCraftPlugin extends Plugin {
 							cellEl.classList.add("error-cell-colorenabled");
 						}
 						// Pass error as separate parameter
-						this.setFormattedCellValue(cellEl, computedValue, error);
+						this.setFormattedCellValue(cellEl, computedValue, scientific, error);
 					} else {
-						this.setFormattedCellValue(cellEl, computedValue);
+						this.setFormattedCellValue(cellEl, computedValue, scientific);
 					}
 
 				} else if (cellType === 3) { // matrix
@@ -326,7 +327,7 @@ export default class CalcCraftPlugin extends Plugin {
 					if (this.settings.formula_background_matrix_toggle) {
 						cellEl.classList.add("matrix-cell-colorenabled");
 					}
-					this.setFormattedCellValue(cellEl, computedValue);
+					this.setFormattedCellValue(cellEl, computedValue, scientific);
 				} else if (cellType === 4) { // escaped_text
 					cellEl.classList.add("escaped-text-cell");
 
@@ -378,9 +379,10 @@ export default class CalcCraftPlugin extends Plugin {
 		});
 	}
 
-	// Apply the global precision setting and separators
-	private formatNumber(num: number): string {
-		return this.applySeparators(formatFixed(num, this.settings.precision));
+	// Apply the global precision setting and separators, in scientific notation if asked
+	private formatNumber(num: number, scientific = false): string {
+		const precision = this.settings.precision;
+		return this.applySeparators(scientific ? formatExponential(num, precision) : formatFixed(num, precision));
 	}
 
 	private applySeparators(numString: string): string {
@@ -399,7 +401,7 @@ export default class CalcCraftPlugin extends Plugin {
 		return result;
 	}
 
-	private setFormattedCellValue(cellEl: HTMLElement, value: any, error?: string): void {
+	private setFormattedCellValue(cellEl: HTMLElement, value: any, scientific: boolean, error?: string): void {
 		let data = value;
 
 		// Handle mathjs Unit objects
@@ -408,11 +410,11 @@ export default class CalcCraftPlugin extends Plugin {
 			(data.value !== undefined && data.units !== undefined))) {
 			// Applies global precision + separators to the number part
 			const parts = splitUnit(data);
-			data = parts ? `${this.formatNumber(parts[0])} ${parts[1]}` : data.toString();
+			data = parts ? `${this.formatNumber(parts[0], scientific)} ${parts[1]}` : data.toString();
 		}
 		// Handle numbers (NOT pre-formatted)
 		else if (typeof data === "number") {
-			data = this.formatNumber(data); // Applies global precision + separators
+			data = this.formatNumber(data, scientific); // Applies global precision + separators
 		}
 		// Handle strings (from format() - already has precision applied)
 		else if (typeof data === "string") {

@@ -2,7 +2,8 @@
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: scientific notation in cells and formulas, whitespace digit grouping,
 // grouping-separator fix, uppercase references, rows numbered after the header,
-// quoted quantities (="5 mL" * 3), format()/scientific() for units, molar unit M, µ/μ micro prefix, dead code removed.
+// quoted quantities (="5 mL" * 3), format()/scientific() for units, scientific results
+// that follow their inputs, molar unit M, µ/μ micro prefix, dead code removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { create, all } from 'mathjs';
@@ -20,12 +21,28 @@ export function formatFixed(value: number, precision: number): string {
     return formatted.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 }
 
+// Exponents are written the way they are typed in cells: 3.6e5, 3.33e-5
+const shortExponent = (s: string) => s.replace("e+", "e");
+
 function formatScientific(value: number, precision: number): string {
     // Use toExponential for scientific notation, dropping trailing zeros
-    return value
+    return shortExponent(value
         .toExponential(precision)
         .replace(/(\.\d*?)0+(e[+-]?\d+)$/, '$1$2')
-        .replace(/\.(e[+-]?\d+)$/, '$1');
+        .replace(/\.(e[+-]?\d+)$/, '$1'));
+}
+
+// Scientific notation for displaying results, following the precision setting like
+// formatFixed: the mantissa keeps trailing zeros only when it was rounded.
+// Numbers from 0.001 up to 1000 stay plain (1.8e5 / 1.8e5 shows 1, not 1e0).
+export function formatExponential(value: number, precision: number): string {
+    if (!isFinite(value) || value === 0) return value.toString();
+    const exponent = Math.floor(Math.log10(Math.abs(value)));
+    if (exponent > -3 && exponent < 3) return formatFixed(value, precision);
+    if (!(precision >= 0)) return shortExponent(value.toExponential());
+    const formatted = value.toExponential(Math.min(precision, 100));
+    if (parseFloat(formatted) !== value) return shortExponent(formatted);
+    return formatScientific(value, Math.min(precision, 100));
 }
 
 // A mathjs Unit as [number, unit], using the unit mathjs displays (best prefix),
@@ -120,6 +137,8 @@ export interface TableResult {
     values: any[][];
     errors: (string | null)[][];
     cellTypes: celltype[][];
+    // Show this cell's result in scientific notation (its inputs are written that way)
+    scientific: boolean[][];
 }
 
 export class TableEvaluator {
@@ -182,8 +201,43 @@ export class TableEvaluator {
         return {
             values: this.tableData,
             errors: this.errors,
-            cellTypes: this.celltype
+            cellTypes: this.celltype,
+            scientific: this.markScientific(gridData)
         };
+    }
+
+    // A result is shown in scientific notation when its inputs are: the formula contains a
+    // number like 1.8e5, or a cell it references is written that way or is itself such a
+    // result (so a sum over scientific results is scientific too)
+    private markScientific(gridData: string[][]): boolean[][] {
+        const memo: (boolean | undefined)[][] = gridData.map(row => row.map(() => undefined));
+        const visiting = new Set<string>();
+
+        const visit = (row: number, col: number): boolean => {
+            const known = memo[row]?.[col];
+            if (known !== undefined) return known;
+            const key = `${row},${col}`;
+            if (visiting.has(key)) return false; // circular reference
+            visiting.add(key);
+
+            const raw = gridData[row]?.[col] || "";
+            let scientific;
+            if (this.celltype[row][col] === celltype.formula) {
+                scientific = /\d[eE][+-]?\d/.test(raw);
+            } else if (this.celltype[row][col] === celltype.escaped_text) {
+                scientific = false;
+            } else {
+                scientific = /^-?[\d,.\s]*\d[eE][+-]?\d/.test(raw);
+            }
+            // formula and matrix cells inherit from what they reference
+            scientific = scientific || this.parents[row][col].some(([r, c]) => visit(r, c));
+
+            visiting.delete(key);
+            memo[row][col] = scientific;
+            return scientific;
+        };
+
+        return gridData.map((row, r) => row.map((_, c) => visit(r, c)));
     }
 
     private initializeArrays(gridData: string[][]) {

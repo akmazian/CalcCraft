@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github.com/klaudyu/CalcCraft) 2.3.7 by akmazian, installed under the plugin ID `calc-craft-fork`. Everything below 2.3.7 is upstream history.
 
+## [Unreleased]
+
+### Added
+- **Results follow their inputs' notation**: a result is shown in scientific notation when its formula contains a number like `1.8e5` or references a cell written that way (or another such result). `=C1*D1` with `D1` = `1.8e5` shows `3.6e5`, and `=sum(E1:E4)` over those shows `1.44e6`; `=2*21` stays `42`. Results from 0.001 up to 1000 stay plain. The decimal-places setting sets the mantissa's decimals (`3.33e-5` at 2)
+
+### Changed
+- `scientific()` writes exponents the way they are typed in cells: `1.235e8`, not `1.235e+8`
+
 ## [2.3.7-fork.1] - 2026-09-25
 
 ### Fork

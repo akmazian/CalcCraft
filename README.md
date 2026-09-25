@@ -52,7 +52,7 @@ If a cell loops back to itself while trying to be computed, a `loop` error is th
 ### Powered by MathJS with Units Support
 Formulas are evaluated using [mathjs](https://mathjs.org/docs/reference/functions.html)
 - **Native unit parsing**: `5 kg`,  `25 celsius`, `12 inch`
-- **Scientific notation**: `1.8e5`, `2e-3 M` in cells and `=2*1.8e5` in formulas
+- **Scientific notation**: `1.8e5`, `2e-3 M` in cells and `=2*1.8e5` in formulas. Results are shown in scientific notation when their inputs are: `=C1*D1` with `D1` = `1.8e5` shows `3.6e5`
 - **Quoted quantities**: `="5 mL" * 3` gives `15 mL`
 - **Lab units**: molar `M` (`mM`, `µM`, `nM`), and `µ` or `μ` as the micro prefix (`12.5 µL`), e.g. `=D1 / (C1 g/mol) / B1 to µL`
 - **Unit arithmetic**: `=5 kg + 3000 g` automatically converts and returns `8 kg`

@@ -6,7 +6,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { TableEvaluator, formatFixed, splitUnit } from "../src/table-evaluator";
+import { TableEvaluator, formatExponential, formatFixed, splitUnit } from "../src/table-evaluator";
 
 const LOCALE = { decimalSeparator: ".", groupingSeparator: "," };
 
@@ -290,7 +290,7 @@ describe("regression: behaviour that must not change", () => {
 		const grid = [["a"], ["=format(1/3, 5)"], ["=scientific(123456789, 3)"]];
 		const { values } = run(grid);
 		assert.equal(values[1][0], "0.33333");
-		assert.equal(values[2][0], "1.235e+8");
+		assert.equal(values[2][0], "1.235e8");
 	});
 
 	test("'= escapes a formula", () => {
@@ -487,12 +487,82 @@ describe("precision for numbers and units", () => {
 
 	test("scientific() on a unit, with and without a fixed unit", () => {
 		const { values } = run([["a"], ['=scientific("180000 mL" to mL, 2)'], ['=scientific("180000 mL", 2)']]);
-		assert.equal(values[1][0], "1.8e+5 mL");
-		assert.equal(values[2][0], "1.8e+2 L"); // mathjs picks the prefix unless fixed with "to"
+		assert.equal(values[1][0], "1.8e5 mL");
+		assert.equal(values[2][0], "1.8e2 L"); // mathjs picks the prefix unless fixed with "to"
 	});
 
 	test("format() and scientific() on numbers are unchanged", () => {
 		const { values } = run([["a"], ["=format(1/3, 5)"], ["=format(2, 3)"], ["=format(1/3, 99)"], ["=scientific(123456789, 3)"]]);
-		assert.deepEqual(values.slice(1).map(r => r[0]), ["0.33333", "2", (1 / 3).toFixed(15), "1.235e+8"]);
+		assert.deepEqual(values.slice(1).map(r => r[0]), ["0.33333", "2", (1 / 3).toFixed(15), "1.235e8"]);
+	});
+});
+
+describe("scientific notation follows the inputs", () => {
+	const sci = (grid: string[][]) => run(grid).result.scientific;
+
+	test("F1: =C1*D1 with D1 = 1.8e5 is scientific; the sum of such results is too", () => {
+		const grid = md(F1);
+		for (let r = 2; r <= 4; r++) grid[r][4] = `=C${r}*D${r}`;
+		grid[5][2] = "=sum(C1:C4)";
+		grid[5][4] = "=sum(E1:E4)";
+		const flags = sci(grid);
+		assert.equal(flags[1][4], true);
+		assert.equal(flags[5][4], true); // sum(E1:E4) -> 1.44e6
+		assert.equal(flags[5][2], false); // sum of plain well counts -> 8
+	});
+
+	test("a literal in the formula: =2*1.8e5 is scientific, =2*21 is not", () => {
+		const flags = sci([["h"], ["=2*1.8e5"], ["=2*21"], ["=2*1.8E5"], ["=1.8e-3*1000"]]);
+		assert.deepEqual(flags.slice(1).map(r => r[0]), [true, false, true, true]);
+	});
+
+	test("plain inputs stay plain: =A1*2 with A1 = 360000", () => {
+		assert.equal(sci([["h", "i"], ["360000", "=A1*2"]])[1][1], false);
+	});
+
+	test("unit cells: =A1 to mM with A1 = 2e-3 M is scientific", () => {
+		assert.equal(sci([["h", "i"], ["2e-3 M", "=A1 to mM"]])[1][1], true);
+	});
+
+	test("matrix results inherit from their formula", () => {
+		const flags = sci([["a", "b"], ["1e5", "=[A1:A2]*2"], ["2e5", ""]]);
+		assert.equal(flags[1][1], true);
+		assert.equal(flags[2][1], true);
+	});
+
+	test("circular references don't hang", () => {
+		assert.deepEqual(sci([["a", "b"], ["=B1*1e5", "=A1"]])[1], [true, true]);
+	});
+
+	test("text and escaped cells are not scientific", () => {
+		assert.deepEqual(sci([["h"], ["pFN2e5"], ["'=2e5"]]).slice(1).map(r => r[0]), [false, false]);
+	});
+});
+
+describe("formatExponential", () => {
+	test("written like cell input: 3.6e5, 3.33e-5", () => {
+		assert.equal(formatExponential(360000, -1), "3.6e5");
+		assert.equal(formatExponential(1440000, -1), "1.44e6");
+		assert.equal(formatExponential(1 / 3e4, 2), "3.33e-5");
+		assert.equal(formatExponential(-360000, -1), "-3.6e5");
+	});
+
+	test("precision keeps mantissa zeros only when rounded", () => {
+		assert.equal(formatExponential(360000, 2), "3.6e5");
+		assert.equal(formatExponential(360001, 2), "3.60e5");
+	});
+
+	test("numbers from 0.001 up to 1000 stay plain", () => {
+		assert.equal(formatExponential(1, -1), "1");
+		assert.equal(formatExponential(999.5, -1), "999.5");
+		assert.equal(formatExponential(0.002, -1), "2e-3");
+		assert.equal(formatExponential(0.0125, 3), "0.013");
+		assert.equal(formatExponential(0, -1), "0");
+	});
+
+	test("the output reads back as the same number", () => {
+		for (const x of [360000, 1440000, 1 / 3e4, 6.02214076e23]) {
+			assert.equal(Number(formatExponential(x, -1)), x);
+		}
 	});
 });
