@@ -1,7 +1,8 @@
 // Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: Table Master compatibility (recompute after its rebuild, merged-cell
-// positions), precision setting for unit results, scientific display of results, header-row detection, uppercase labels numbered from the first row
+// positions), precision setting for unit results, scientific display of results,
+// no colour or border on computed cells, header-row detection, uppercase labels numbered from the first row
 // after the header, dead label code and debug logging removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
@@ -303,12 +304,6 @@ export default class CalcCraftPlugin extends Plugin {
 				// Apply styling and content based on cell type
 				if (cellType === 2) { // formula
 					cellEl.classList.add("formula-cell");
-					if (this.settings.showBorders) {
-						cellEl.classList.add("formula-cell-borderenabled");
-					}
-					if (this.settings.formula_background_color_toggle) {
-						cellEl.classList.add("formula-cell-colorenabled");
-					}
 					cellEl.setAttribute("title", cellContent);
 
 					if (error) {
@@ -324,9 +319,6 @@ export default class CalcCraftPlugin extends Plugin {
 
 				} else if (cellType === 3) { // matrix
 					cellEl.classList.add("matrix-cell");
-					if (this.settings.formula_background_matrix_toggle) {
-						cellEl.classList.add("matrix-cell-colorenabled");
-					}
 					this.setFormattedCellValue(cellEl, computedValue, scientific);
 				} else if (cellType === 4) { // escaped_text
 					cellEl.classList.add("escaped-text-cell");

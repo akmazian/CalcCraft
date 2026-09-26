@@ -259,15 +259,13 @@ This allows selective processing - only notes with the specified `cssclasses` wi
 ### Plugin Settings
 - **Decimal precision**: Control number of decimal places (-1 for default)
 - **Show labels**: Display row numbers and column letters
-- **Formula cell styling**: Borders, colors, and highlighting options
 - **Parent/children highlighting**: Colors for dependency visualization
 - **Error cell styling**: Visual feedback for formula errors
 - **Theme support**: Separate color schemes for light and dark themes
 - **Class filtering**: Enable/disable selective processing by cssclass
 
 ### Visual Customization
-- **Formula cells**: Highlighted with borders and background colors
-- **Matrix cells**: Special styling for cells filled by matrix operations
+- **Computed cells**: Look like normal cells; hover a cell to see its formula
 - **Error cells**: Clear visual indication of calculation errors
 - **Hover effects**: Dynamic highlighting of cell dependencies
 - **Row/column labels**: Optional display of spreadsheet-style coordinates

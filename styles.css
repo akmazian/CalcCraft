@@ -1,33 +1,8 @@
 /* Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
    (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
    Changes: removed CSS rules for the old label rows and invalid '#' declarations;
-   no hover underline on the cell being edited. */
-
-/**********formula cell************/
-/*light theme*/
-.markdown-rendered .formula-cell-borderenabled {
-  border:2px double;
-}
-.markdown-rendered .formula-cell-colorenabled {
-  background-color: var(--CalcCraft_formula_background_color_light)!important ;  /* Light gray background */
-  color:var(--CalcCraft_formula_font_color_light)!important;
-}
-/*dark theme*/
-.theme-dark .markdown-rendered .formula-cell-colorenabled{
-    background-color: var(--CalcCraft_formula_background_color_dark)!important;
-    color:var(--CalcCraft_formula_font_color_dark)!important;
-}
-
-/**********matrix  cell************/
-
-.markdown-rendered .matrix-cell-colorenabled {
-  background-color: var(--CalcCraft_formula_background_matrix_light)!important ;  /* Light gray background */
-  color:var(--CalcCraft_formula_font_matrix_light)!important;
-}
-.theme-dark .markdown-rendered .matrix-cell-colorenabled {
-  background-color: var(--CalcCraft_formula_background_matrix_dark)!important ;  /* Light gray background */
-  color:var(--CalcCraft_formula_font_matrix_dark)!important;
-}
+   no hover underline on the cell being edited; no colour or border on computed cells;
+   computed values aligned like normal cell text in Live Preview. */
 
 /**************** error cells**************/
 .markdown-rendered .error-cell-colorenabled{
@@ -68,42 +43,22 @@
     text-decoration: underline;
 }
 
-/* Hide original text when showing computed value */
+/* Live Preview: hide the formula text and show the computed value in its place. The
+   wrapper keeps Obsidian's cell padding, and the value uses the table's own font size
+   and line height, so it sits exactly where normal cell text does. */
 .cm-table-widget .table-cell-wrapper.calc-overlay-cell:not(:focus-within) {
-    position: relative;
     font-size: 0; /* Collapse the text so it doesn't affect layout */
     line-height: 0;
 }
 
-/* Base overlay - inherits color from parent cell */
 .cm-table-widget .table-cell-wrapper.calc-overlay-cell:not(:focus-within)::after {
-content: attr(data-calc-display);
-position: relative; /* Changed from absolute */
-display: inline-block; /* Changed to allow sizing */
-white-space: pre;
-color: inherit;
-font-size: 1rem; /* Restore normal font size */
-line-height: normal; /* Restore normal line height */
-padding: 0 4px;
-vertical-align: middle;
-}
-
-/* Formula cell overlays - inherit formula colors */
-.cm-table-widget .formula-cell-colorenabled .table-cell-wrapper.calc-overlay-cell:not(:focus-within)::after {
-    color: var(--CalcCraft_formula_font_color_light);
-}
-
-.theme-dark .cm-table-widget .formula-cell-colorenabled .table-cell-wrapper.calc-overlay-cell:not(:focus-within)::after {
-    color: var(--CalcCraft_formula_font_color_dark);
-}
-
-/* Matrix cell overlays */
-.cm-table-widget .matrix-cell-colorenabled .table-cell-wrapper.calc-overlay-cell:not(:focus-within)::after {
-    color: var(--CalcCraft_formula_font_matrix_light);
-}
-
-.theme-dark .cm-table-widget .matrix-cell-colorenabled .table-cell-wrapper.calc-overlay-cell:not(:focus-within)::after {
-    color: var(--CalcCraft_formula_font_matrix_dark);
+    content: attr(data-calc-display);
+    display: inline-block;
+    vertical-align: top;
+    white-space: pre;
+    color: inherit;
+    font-size: var(--table-text-size);
+    line-height: var(--table-line-height);
 }
 
 /* Error cell overlays */

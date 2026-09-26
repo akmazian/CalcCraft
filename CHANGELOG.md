@@ -15,6 +15,8 @@ Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github
 - **Results follow their inputs' notation**: a result is shown in scientific notation when its formula contains a number like `1.8e5` or references a cell written that way (or another such result). `=C1*D1` with `D1` = `1.8e5` shows `3.6e5`, and `=sum(E1:E4)` over those shows `1.44e6`; `=2*21` stays `42`. Results from 0.001 up to 1000 stay plain. The decimal-places setting sets the mantissa's decimals (`3.33e-5` at 2)
 
 ### Changed
+- Computed values in Live Preview sit exactly where normal cell text does: the overlay no longer adds its own padding, font size, line height or vertical alignment
+- **Removed** the background colour and the double border on formula and matrix (array-result) cells, and their settings ("formula's cells color", "matrix cell color", "show formula cell borders"). Error colouring and the hover highlighting of parents and children are kept
 - The cell being edited is no longer underlined; the hover underline only marks cells you aren't editing
 - `scientific()` writes exponents the way they are typed in cells: `1.235e8`, not `1.235e+8`
 

@@ -1,6 +1,6 @@
 // Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
-// Changes: indentation and the matrix colour description only.
+// Changes: indentation; removed the formula/matrix cell colour and border settings.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { PluginSettingTab, Setting } from "obsidian";
@@ -9,29 +9,18 @@ import { buyMeACoffee, paypal, revolut } from "./support";
 export const DefaultSettings = {
 	precision: -1,
 	showLabels: true,
-	formula_background_color_toggle: true,
-	showBorders: true,
 	digitGrouping: false,
 	groupingSeparator: ",",
 	decimalSeparator: ".",
 	formula_background_error_toggle: true,
 	formula_background_parents_toggle: true,
 	formula_background_children_toggle: true,
-	formula_background_matrix_toggle: true,
-	formula_background_color_light: "#e0f2ff",
-	formula_font_color_light: "#008bc7",
-	formula_background_matrix_light: "#edf3f8",
-	formula_font_matrix_light: "#3f74ab",
 	formula_background_error_light: "#ff7aaf",
 	formula_font_error_light: "#feffc7",
 	formula_background_parents_light: "#157ca8",
 	formula_font_parents_light: "#e3f2fe",
 	formula_background_children_light: "#80f9c5",
 	formula_font_children_light: "#004480",
-	formula_background_color_dark: "#393347",
-	formula_font_color_dark: "#fffafa",
-	formula_background_matrix_dark: "#393346",
-	formula_font_matrix_dark: "#ffffff",
 	formula_background_error_dark: "#5c0000",
 	formula_font_error_dark: "#eca7a7",
 	formula_background_parents_dark: "#1f5656",
@@ -129,17 +118,6 @@ export class CalcCraftSettingsTab extends PluginSettingTab {
 				})
 			);
 		new Setting(containerEl)
-			.setName("show formula cell borders")
-			.setDesc("show borders.")
-			.addToggle(toggle =>
-				toggle.setValue(this.plugin.settings.showBorders).onChange(async value => {
-					this.plugin.settings.showBorders = value;
-					await this.plugin.saveSettings();
-					this.reloadPages();
-				})
-			);
-
-		new Setting(containerEl)
 			.setName("Only process pages with specific cssclass")
 			.setDesc("When enabled, only pages with the specified cssclass in frontmatter will be processed")
 			.addToggle(toggle =>
@@ -196,13 +174,6 @@ export class CalcCraftSettingsTab extends PluginSettingTab {
 
 			this.createColorpicker_fg_bg(
 				containerEl,
-				"formula's cells color",
-				"always shown",
-				`formula_font_color_${theme}`,
-				`formula_background_color_${theme}`
-			);
-			this.createColorpicker_fg_bg(
-				containerEl,
 				"error cell color",
 				"if cell is not computable",
 				`formula_font_error_${theme}`,
@@ -223,14 +194,6 @@ export class CalcCraftSettingsTab extends PluginSettingTab {
 				"When you hover over a cell, highlight the cells that depend on this cell.",
 				`formula_font_children_${theme}`,
 				`formula_background_children_${theme}`
-			);
-
-			this.createColorpicker_fg_bg(
-				containerEl,
-				"matrix cell color",
-				"cells filled by an array formula",
-				`formula_font_matrix_${theme}`,
-				`formula_background_matrix_${theme}`
 			);
 		});
 
