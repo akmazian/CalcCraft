@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github.com/klaudyu/CalcCraft) 2.3.7 by akmazian, installed under the plugin ID `calc-craft-fork`. Everything below 2.3.7 is upstream history.
 
+## [Unreleased]
+
+### Removed
+- The underline on the hovered cell
+
 ## [2.3.7-fork.2] - 2026-09-25
 
 ### Added

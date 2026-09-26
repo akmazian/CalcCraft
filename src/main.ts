@@ -2,7 +2,7 @@
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: Table Master compatibility (recompute after its rebuild, merged-cell
 // positions), precision setting for unit results, scientific display of results,
-// no colour or border on computed cells, Enter in the last row leaves the table, header-row detection, uppercase labels numbered from the first row
+// no colour or border on computed cells, no hover underline, Enter in the last row leaves the table, header-row detection, uppercase labels numbered from the first row
 // after the header, dead label code and debug logging removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
@@ -464,7 +464,6 @@ export default class CalcCraftPlugin extends Plugin {
 			const target = event.target as HTMLElement;
 			const cellEl = target.closest("td, th") as HTMLElement; // Get the closest cell element to the event target
 			if (!cellEl) return; // No cell? Get outta here.
-			cellEl.classList.add("cell-active");
 			if ((cellEl as any)?.CalcCraft == undefined) return;
 
 			if (
@@ -489,7 +488,6 @@ export default class CalcCraftPlugin extends Plugin {
 			const target = event.target as HTMLElement;
 			const cellEl = target.closest("td, th") as HTMLElement; // Get the closest cell element to the event target
 			if (!cellEl) return; // No cell? Get outta here.
-			cellEl.classList.remove("cell-active");
 
 			if ((cellEl as any)?.CalcCraft == undefined) return;
 			if (
@@ -650,9 +648,9 @@ export default class CalcCraftPlugin extends Plugin {
 
 		// Remove highlight classes and the "active" marker
 		tableEl.querySelectorAll<HTMLElement>(
-			'.cell-parents-highlight, .cell-children-highlight, .cell-active, .calc-overlay-cell'
+			'.cell-parents-highlight, .cell-children-highlight, .calc-overlay-cell'
 		).forEach(el => {
-			el.classList.remove('cell-parents-highlight', 'cell-children-highlight', 'cell-active', 'calc-overlay-cell');
+			el.classList.remove('cell-parents-highlight', 'cell-children-highlight', 'calc-overlay-cell');
 
 			// remove overlay dataset if present
 			const wrapper = el.querySelector<HTMLElement>('.table-cell-wrapper');

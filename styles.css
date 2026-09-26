@@ -1,7 +1,7 @@
 /* Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
    (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
    Changes: removed CSS rules for the old label rows and invalid '#' declarations;
-   no hover underline on the cell being edited; no colour or border on computed cells;
+   no hover underline; no colour or border on computed cells;
    computed values aligned like normal cell text in Live Preview. */
 
 /**************** error cells**************/
@@ -36,11 +36,6 @@
 .theme-dark  .markdown-rendered .cell-children-highlight {
     background-color: var(--CalcCraft_formula_background_children_dark)!important;
     color:var(--CalcCraft_formula_font_children_dark)!important;
-}
-
-/*active class: underline the hovered cell, but not the one being edited*/
-.markdown-rendered td.cell-active:not(:focus-within){
-    text-decoration: underline;
 }
 
 /* Live Preview: hide the formula text and show the computed value in its place. The
