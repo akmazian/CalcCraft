@@ -1,6 +1,7 @@
 /* Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
    (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
-   Changes: removed CSS rules for the old label rows and invalid '#' declarations. */
+   Changes: removed CSS rules for the old label rows and invalid '#' declarations;
+   no hover underline on the cell being edited. */
 
 /**********formula cell************/
 /*light theme*/
@@ -62,8 +63,8 @@
     color:var(--CalcCraft_formula_font_children_dark)!important;
 }
 
-/*active class*/
-.markdown-rendered td.cell-active{
+/*active class: underline the hovered cell, but not the one being edited*/
+.markdown-rendered td.cell-active:not(:focus-within){
     text-decoration: underline;
 }
 
