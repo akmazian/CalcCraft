@@ -2,7 +2,7 @@
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: Table Master compatibility (recompute after its rebuild, merged-cell
 // positions), precision setting for unit results, scientific display of results,
-// no colour or border on computed cells, header-row detection, uppercase labels numbered from the first row
+// no colour or border on computed cells, Enter in the last row leaves the table, header-row detection, uppercase labels numbered from the first row
 // after the header, dead label code and debug logging removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
@@ -584,6 +584,24 @@ export default class CalcCraftPlugin extends Plugin {
 			root.removeEventListener("blur", onCellBlur, true);
 		});
 
+		// Obsidian's table editor adds a row when Enter is pressed in the last row. While
+		// editing a cell there, leave the table instead (captured before the cell editor sees it)
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.key !== "Enter" || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
+			const target = e.target as HTMLElement;
+			if (!target?.closest?.(".cm-table-widget .table-cell-wrapper")) return;
+			const row = target.closest("tr");
+			const table = target.closest("table");
+			if (!row || !table || row !== table.rows[table.rows.length - 1]) return;
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			this.leaveTable(view as MarkdownView, table);
+		};
+		root.addEventListener("keydown", onKeyDown, true);
+		this.lpCleanup.push(() => {
+			root.removeEventListener("keydown", onKeyDown, true);
+		});
+
 		// Recompute on DOM changes (childList only, debounced)
 		const mo = new MutationObserver((mutations) => {
 			// if editing inside a table widget, do not recompute
@@ -606,6 +624,26 @@ export default class CalcCraftPlugin extends Plugin {
 		// Initial pass
 		this.recomputeLivePreview();
 	};
+
+	// Move the cursor to the start of the line below a Live Preview table, adding that
+	// line if the table ends the note
+	private leaveTable(view: MarkdownView, tableEl: HTMLTableElement) {
+		const editor = view.editor;
+		const cm = (editor as any).cm;
+		const widget = tableEl.closest(".cm-table-widget");
+		if (!cm || !widget) return;
+		const firstLine = editor.offsetToPos(cm.posAtDOM(widget)).line;
+		// header + separator + body rows
+		const lastLine = Math.min(firstLine + tableEl.rows.length, editor.lineCount() - 1);
+		if (lastLine + 1 >= editor.lineCount()) {
+			editor.replaceRange("\n", { line: lastLine, ch: editor.getLine(lastLine).length });
+		}
+		// The cell has its own nested editor, and Obsidian's editor.focus() returns focus to
+		// the active cell, so blur the cell and focus the note's CodeMirror view directly
+		editor.setCursor({ line: lastLine + 1, ch: 0 });
+		(document.activeElement as HTMLElement | null)?.blur();
+		cm.focus();
+	}
 
 	private clearTableHighlights(tableEl: HTMLTableElement) {
 		if (!tableEl) return;
