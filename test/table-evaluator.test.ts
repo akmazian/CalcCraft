@@ -778,3 +778,27 @@ describe("TODO 4: #REF! written into a formula", () => {
 		assert.match(String(res.result.errorDetails[1][1]), /deleted/);
 	});
 });
+
+describe("IF evaluates only the branch it takes", () => {
+	const at = (grid: string[][], r: number, c: number) => {
+		const res = run(grid);
+		return res.errors[r][c] ?? res.values[r][c];
+	};
+
+	test("=IF(A1>0, LOG(A1), 0) with A1 = 0 is 0 (was #NUM!)", () => {
+		assert.equal(at([["a", "b"], ["0", "=IF(A1>0, LOG(A1), 0)"]], 1, 1), 0);
+		assert.equal(at([["a", "b"], ["100", "=IF(A1>0, LOG(A1), 0)"]], 1, 1), 2);
+	});
+
+	test("a cell with an error in the branch not taken doesn't matter", () => {
+		const grid = [["a", "b", "c"], ["0", "=1/0", "=IF(A1=0, 0, B1*2)"]];
+		assert.equal(at(grid, 1, 2), 0);
+		grid[1][0] = "1";
+		assert.equal(at(grid, 1, 2), "#DIV/0!");
+	});
+
+	test("errors in the condition, and IF with the wrong number of arguments", () => {
+		assert.equal(at([["a", "b"], ["=1/0", "=IF(A1, 1, 2)"]], 1, 1), "#DIV/0!");
+		assert.equal(at([["a"], ["=IF(1)"]], 1, 0), "#VALUE!");
+	});
+});

@@ -29,6 +29,11 @@ export function cellSpans(line: string): { from: number; to: number }[] {
 	return spans;
 }
 
+// Markdown backslash escapes mean the character itself: =A1\*B1 is =A1*B1
+export function unescapeMarkdown(text: string): string {
+	return text.replace(/\\([!-/:-@[-`{-~])/g, "$1");
+}
+
 // The raw text of each cell in a table row: "| a | b\|c |" -> ["a", "b|c"]
 export function splitRow(line: string): string[] {
 	return cellSpans(line).map(({ from, to }) => line.slice(from, to).replace(/\\\|/g, "|"));
@@ -42,8 +47,10 @@ export interface SourceTable {
 	rows: string[][];
 }
 
-// Every table in these lines; `offset` is the line number of lines[0]
-export function sourceTables(lines: string[], offset = 0): SourceTable[] {
+// Every table in these lines; `offset` is the line number of lines[0], or the line number of
+// each line when they aren't consecutive
+export function sourceTables(lines: string[], offset: number | number[] = 0): SourceTable[] {
+	const lineNumber = (n: number) => (typeof offset === "number" ? n + offset : offset[n]);
 	const tables: SourceTable[] = [];
 	let i = 0;
 	while (i < lines.length) {
@@ -59,7 +66,7 @@ export function sourceTables(lines: string[], offset = 0): SourceTable[] {
 		if (end < lines.length && SEPARATOR.test(lines[end])) end--;
 		const rowLines = [...range(start, i), ...range(i + 1, end)];
 		tables.push({
-			rowLines: rowLines.map(n => n + offset),
+			rowLines: rowLines.map(lineNumber),
 			headerRows: i - start,
 			rows: rowLines.map(n => splitRow(lines[n])),
 		});
@@ -82,14 +89,37 @@ export function tableAtLine(lines: string[], line: number): string[][] | null {
 	return tablesInLines(lines.slice(line, end))[0] ?? null;
 }
 
+export interface TableBlock {
+	start: number;
+	// line after the block's last line
+	end: number;
+	lines: string[];
+	// line number of each entry of lines (blank lines are left out)
+	lineNumbers: number[];
+}
+
 // The contiguous block of table lines around `line` (or the line above it, for an edit that
-// removed a table's last row), read through getLine; null if there is none
-export function tableBlockAround(getLine: (n: number) => string, lineCount: number, line: number): { start: number; lines: string[] } | null {
+// removed a table's last row), read through getLine; null if there is none. Rows stranded
+// below it by blank lines (pressing Enter at the end of a row in source mode splits the table
+// until the new row is typed) are included, as long as they aren't a table of their own.
+export function tableBlockAround(getLine: (n: number) => string, lineCount: number, line: number): TableBlock | null {
 	if (line >= lineCount || !isTableLine(getLine(line))) line--;
+	while (line > 0 && getLine(line).trim() === "") line--; // blank lines inside a split table
 	if (line < 0 || !isTableLine(getLine(line))) return null;
 	let start = line;
 	while (start > 0 && isTableLine(getLine(start - 1))) start--;
-	let end = line + 1;
-	while (end < lineCount && isTableLine(getLine(end))) end++;
-	return { start, lines: range(start, end).map(getLine) };
+	const lineNumbers: number[] = [];
+	let end = start;
+	for (;;) {
+		while (end < lineCount && isTableLine(getLine(end))) lineNumbers.push(end++);
+		// blank lines followed by stranded rows (table lines without a separator of their own)
+		let next = end;
+		while (next < lineCount && getLine(next).trim() === "") next++;
+		let orphanEnd = next;
+		while (orphanEnd < lineCount && isTableLine(getLine(orphanEnd))) orphanEnd++;
+		const orphans = range(next, orphanEnd);
+		if (next === end || !orphans.length || orphans.some(n => SEPARATOR.test(getLine(n)))) break;
+		end = next;
+	}
+	return { start, end, lines: lineNumbers.map(getLine), lineNumbers };
 }

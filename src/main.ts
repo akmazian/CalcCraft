@@ -15,7 +15,7 @@ import { EditorView } from "@codemirror/view";
 import { EditorState, Transaction, TransactionSpec } from "@codemirror/state";
 import { CalcCraftSettingsTab, DefaultSettings } from "./settings";
 import { TableEvaluator, formatExponential, formatFixed, splitUnit } from "./table-evaluator";
-import { cellSpans, sourceTables, tableAtLine, tableBlockAround, tablesInLines } from "./table-source";
+import { cellSpans, sourceTables, tableAtLine, tableBlockAround, tablesInLines, unescapeMarkdown } from "./table-source";
 import { detectStructureChange, existedBefore, shiftReferences } from "./table-structure";
 
 const debug = false;
@@ -87,9 +87,15 @@ export default class CalcCraftPlugin extends Plugin {
 				const oldBlock = tableBlockAround(n => oldDoc.line(n + 1).text, oldDoc.lines, oldDoc.lineAt(fromA).number - 1);
 				const newBlock = tableBlockAround(n => newDoc.line(n + 1).text, newDoc.lines, newDoc.lineAt(fromB).number - 1);
 				if (!oldBlock || !newBlock || done.has(newBlock.start)) return;
+				// the edit must map the whole old table onto the whole new one; otherwise part of
+				// a table could look like the table with rows deleted
+				const lineStart = (doc: typeof oldDoc, n: number) => doc.line(n + 1).from;
+				const lineEnd = (doc: typeof oldDoc, n: number) => doc.line(n).to;
+				if (tr.changes.mapPos(lineStart(oldDoc, oldBlock.start), -1) !== lineStart(newDoc, newBlock.start)) return;
+				if (tr.changes.mapPos(lineEnd(oldDoc, oldBlock.end), 1) !== lineEnd(newDoc, newBlock.end)) return;
 				done.add(newBlock.start);
-				const before = sourceTables(oldBlock.lines, oldBlock.start);
-				const after = sourceTables(newBlock.lines, newBlock.start);
+				const before = sourceTables(oldBlock.lines, oldBlock.lineNumbers);
+				const after = sourceTables(newBlock.lines, newBlock.lineNumbers);
 				if (before.length !== 1 || after.length !== 1) return;
 				const change = detectStructureChange(before[0].rows, after[0].rows);
 				if (!change) return;
@@ -326,7 +332,8 @@ export default class CalcCraftPlugin extends Plugin {
 			row.map((cellEl, c) => {
 				if (!cellEl) return "";
 				const raw = useSource ? source[r]?.[c] : undefined;
-				if (raw !== undefined && (raw.startsWith("=") || raw.startsWith("'="))) return raw;
+				// markdown escapes such as \* (so * doesn't turn into italics) mean the character itself
+				if (raw !== undefined && (raw.startsWith("=") || raw.startsWith("'="))) return unescapeMarkdown(raw);
 				const wrapper = cellEl.querySelector('.table-cell-wrapper');
 				const cellContent = wrapper ? wrapper.textContent : cellEl.textContent;
 				return (cellContent || "").trim();

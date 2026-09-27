@@ -23,6 +23,7 @@ Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github
 - **Excel error codes**: errors show as `#DIV/0!`, `#REF!`, `#NAME?`, `#VALUE!`, `#NUM!`, `#SPILL!`, `#CIRCULAR!` (loops) or `#ERROR!` (formula syntax). Hovering the cell shows the formula and the full reason
 
 ### Fixed
+- **`IF` only evaluates the branch it takes**, like Excel: `=IF(A1>0, LOG(A1), 0)` with `A1` = 0 is `0` (was `#NUM!`), and a cell with an error used only in the other branch no longer matters
 - **Formulas with `*` were misread**: CalcCraft read formulas from the rendered cell, where Obsidian had already turned `*...*` into italics and dropped the asterisks, so `=A1*B1+A1*B1` was read as `=A1B1+A1B1` and gave a wrong number (`46` instead of `12`), and `=A2*B2*2` gave `#REF!`. Formulas are now read from the note's markdown source, in Live Preview and reading view
 - **Errors propagate**: a formula using a cell with an error gets the same error (the hover text says where it came from). It used to treat the cell as `0`, and a reference outside the table was reported as a loop
 - **`=1/0` is `#DIV/0!`**, not `Infinity`

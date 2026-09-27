@@ -150,6 +150,18 @@ const roundAway = (n: number, digits: number, up: boolean) => {
 const excelRound = (n: number, digits: number) =>
     digits >= 0 ? (math.round(n, digits) as number) : (math.round(n / Math.pow(10, -digits)) as number) * Math.pow(10, -digits);
 
+// IF evaluates only the branch it takes, like Excel: =IF(A1>0, LOG(A1), 0) with A1 = 0 is 0
+// (math.js passes unevaluated arguments to functions marked rawArgs)
+function lazyIf() {
+    const IF = (args: any[], _math: any, scope: any) => {
+        if (args.length < 2 || args.length > 3) throw excelError("#VALUE!", "IF takes 2 or 3 arguments");
+        const branch = args[0].compile().evaluate(scope) ? args[1] : args[2];
+        return branch ? branch.compile().evaluate(scope) : false;
+    };
+    (IF as any).rawArgs = true;
+    return IF;
+}
+
 const EXCEL_FUNCTIONS: Record<string, (...args: any[]) => any> = {
     SUM: (...args: any[]) => (math as any).sum(...args),
     AVERAGE: (...args: any[]) => {
@@ -187,7 +199,7 @@ const EXCEL_FUNCTIONS: Record<string, (...args: any[]) => any> = {
         if (!v.length) throw excelError("#DIV/0!", "no numbers");
         return math.variance(v, "uncorrected");
     },
-    IF: (condition: any, ifTrue: any, ifFalse: any = false) => (condition ? ifTrue : ifFalse),
+    IF: lazyIf(),
     AND: (...args: any[]) => {
         const v = flatValues(args).filter(x => typeof x !== "string");
         if (!v.length) throw excelError("#VALUE!", "no values");
@@ -245,6 +257,8 @@ const MATHJS_AGGREGATES: Record<string, (...args: any[]) => any> = {
 };
 
 math.import({
+    // a referenced cell's error, raised only if this part of the formula is evaluated
+    cc_error: (code: string, reason: string) => { throw excelError(code, reason); },
     ...Object.fromEntries(Object.entries(EXCEL_FUNCTIONS).map(([name, f]) => [`excel_${name}`, f])),
     ...Object.fromEntries(Object.entries(MATHJS_AGGREGATES).map(([name, f]) => [`cc_${name}`, f])),
     TRUE: true,
@@ -544,6 +558,18 @@ export class TableEvaluator {
     // The error to throw to a formula that uses this (errored) cell
     private propagatedError(row: number, col: number): CellError {
         return new CellError(this.errors[row][col] as string, `${this.cords2ref(row, col)}: ${this.errorDetails[row][col]}`);
+    }
+
+    // A cell's value as formula text; for a cell with an error, a placeholder that raises it
+    // only when evaluated (so IF's other branch, for example, can still be used)
+    private valueOrError(row: number, col: number): any {
+        try {
+            return this.getValueByCoordinates(row, col);
+        } catch (error) {
+            if (!(error instanceof CellError)) throw error;
+            const quote = (text: string) => JSON.stringify(text.replace(/"/g, "'"));
+            return `cc_error(${quote(error.code)}, ${quote(error.reason)})`;
+        }
     }
 
     private isBlank(row: number, col: number): boolean {
@@ -918,7 +944,7 @@ export class TableEvaluator {
 
         //this.debug(`{cords2ref[row,col]} is a parent of {cords2ref(formulaRow,formulaCol)}`);
         this.children[row][col].push([formulaRow, formulaCol]);
-        const value = this.getValueByCoordinates(row, col);
+        const value = this.valueOrError(row, col);
         return skipBlanks && this.isBlank(row, col) ? "null" : value;
     }
 
@@ -1094,7 +1120,7 @@ export class TableEvaluator {
                 this.parents[formulaRow][formulaCol].push([r, c]);
                 this.children[r][c].push([formulaRow, formulaCol]);
 
-                const val = this.getValueByCoordinates(r, c);
+                const val = this.valueOrError(r, c);
                 // blanks are null (skipped) in aggregates; matrices keep them as 0
                 colArray.push(!matrix && skipBlanks && this.isBlank(r, c) ? null : val);
             }
