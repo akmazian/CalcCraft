@@ -11,6 +11,12 @@ Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github
 
 ## [Unreleased]
 
+### Fixed
+- **Percentages**: `50%` is read as `0.5` (it was read as `50`)
+- **No more partial numbers**: a cell is only a number if all of it is one. Dates (`2026-09-25`) and ratios (`2.5:1`, `1:1`) were read as their first number (`2026`, `2.5`); they are now text, so arithmetic on them shows an error
+- **`#SPILL!`**: an array result no longer overwrites cells that contain something else; it shows `#SPILL!` instead. Copies of the same array formula can still be overwritten, so repeating one down a column keeps working
+- **Ambiguous signs**: `=A1-1c+0r` read the `-` as part of the relative reference and joined the two values (`10` and `2` became `102`). A signed relative reference right after a value is now an error asking for brackets: `A1 - (-1c+0r)`
+
 ### Removed
 - The underline on the hovered cell
 

@@ -239,8 +239,8 @@ values that don't fit in the existing table are disgarded
 |                  1                  | 4   | 8   | 3   | 1                   | 1   |             |
 |             =sum(F6:G8)             | 3   | 1   |     |                     |     |             |
 |                                     |     |     |     |                     |     |             |
-|    =diag([A1:C3])\*diag([A1:C3])    |     |     |     | =transpose([A2:C4]) | 0   |             |
-| =dotMultiply(diag([A1:C3]),[A1:A3]) |     |     | 3   | 0                   |     |             |
+|    =diag([A1:C3])\*diag([A1:C3])    |     |     |     | =transpose([A2:C4]) |     |             |
+| =dotMultiply(diag([A1:C3]),[A1:A3]) |     |     | 3   |                     |     |             |
 |                                     |     |     |     |                     |     |             |
 |                                     |     |     |     |                     |     |             |
 |    =dotMultiply([A1:C3],[D1:F3])    |     |     |     |                     |     | =sum(D6:F8) |

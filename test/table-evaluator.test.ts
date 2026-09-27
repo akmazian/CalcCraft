@@ -566,3 +566,62 @@ describe("formatExponential", () => {
 		}
 	});
 });
+
+describe("TODO 5-9: no more silently wrong numbers", () => {
+	test("5. percentages: 50% -> 0.5, 12,5% with decimal ',' -> 0.125", () => {
+		assert.equal(written("50%"), "0.5");
+		assert.equal(written("-2.5 %"), "-0.025");
+		assert.equal(written("12,5%", { decimalSeparator: ",", groupingSeparator: "." }), "0.125");
+		assert.equal(run([["a", "b"], ["50%", "=A1*2"]]).values[1][1], 1);
+	});
+
+	test("6. a date is text, not its year: =A1+1 is an error", () => {
+		assert.equal(written("2026-09-25"), '"2026-09-25"');
+		const { values, errors } = run([["a", "b"], ["2026-09-25", "=A1+1"]]);
+		assert.equal(values[1][1], null);
+		assert.ok(errors[1][1]);
+	});
+
+	test("9. a ratio is text, not its first number", () => {
+		assert.equal(written("2.5:1"), '"2.5:1"');
+		assert.equal(written("1:1"), '"1:1"');
+		assert.ok(run([["a", "b"], ["2.5:1", "=A1*2"]]).errors[1][1]);
+	});
+
+	test("strict numbers still accept the usual forms", () => {
+		for (const [cell, expected] of [["42", "42"], ["-3.5", "-3.5"], [".5", "0.5"], ["5.", "5"], ["+7", "7"], ["1,234.5", "1234.5"], ["1 000", "1000"], ["1.8e5", "180000"]]) {
+			assert.equal(written(cell), expected, cell);
+		}
+		assert.equal(written("1.234,5", { decimalSeparator: ",", groupingSeparator: "." }), "1234.5");
+		assert.notEqual(written("0x10"), "16"); // 0 with unit "x10", like 12w
+	});
+
+	test("7. an array result doesn't overwrite typed cells: #SPILL!", () => {
+		const { values, errors } = run([["a", "b"], ["=[1;2;3]", ""], ["", ""], ["keep me", ""]]);
+		assert.equal(errors[1][0], "#SPILL!");
+		assert.equal(values[3][0], "keep me");
+	});
+
+	test("7. an array result may overwrite copies of its own formula", () => {
+		const f = "=[A1:A2]*2";
+		const { values, errors } = run([["a", "b"], ["1", f], ["2", f]]);
+		assert.equal(errors[1][1], null);
+		assert.deepEqual([values[1][1], values[2][1]], [2, 4]);
+	});
+
+	test("7. an array result still fills empty cells", () => {
+		const { values, errors } = run([["a", "b"], ["=[1;2;3]", ""], ["", ""], ["", ""]]);
+		assert.equal(errors[1][0], null);
+		assert.deepEqual([values[1][0], values[2][0], values[3][0]], [1, 2, 3]);
+	});
+
+	test("8. a sign right after a value is ambiguous: =A1-1c+0r is an error, not 102", () => {
+		const grid = (f: string) => [["A", "B", "C"], ["10", "2", f]];
+		const bad = run(grid("=B1-1c+0r"));
+		assert.match(String(bad.errors[1][2]), /ambiguous "-1c\+0r"/);
+		assert.equal(run(grid("=A1 - (-1c+0r)")).values[1][2], 8);
+		assert.equal(run(grid("=A1 - -1c+0r")).values[1][2], 8);
+		assert.equal(run(grid("=-2c+0r * -1c+0r")).values[1][2], 20);
+		assert.equal(run(grid("=sum(-2c1:-1c1)")).values[1][2], 12); // after "(" is fine
+	});
+});

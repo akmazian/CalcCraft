@@ -11,11 +11,11 @@ Behaviour described as of `2.3.7-fork.2`. Difficulty is a rough guess.
 ## Silently wrong numbers
 
 - [ ] 4. **Inserting, deleting or moving rows/columns doesn't update references.** Add a row above and `=C1*D1` points at different cells without any error. Excel rewrites references. *Hard.*
-- [ ] 5. **`50%` is read as 50**, so `=A1*2` gives `100` instead of `1`. *Easy.*
-- [ ] 6. **Dates are read as their year**: `2026-09-25` becomes `2026`, so `=A1+1` gives `2027`. *Easy to make an error; medium to support dates.*
-- [ ] 7. **Array results overwrite typed cells without warning.** `=[1;2;3]` writes over the cells below even if they contain values. Excel shows `#SPILL!`. *Easy.*
-- [ ] 8. **A sign after a reference glues into a relative reference**: `=A1-1c+0r` gives `102` (10 followed by 2) instead of 8. *Easy.*
-- [ ] 9. **Ratios like `2.5:1` are read as `2.5`** (and `1:1` as `1`). *Easy.*
+- [x] 5. **`50%` is read as 50**, so `=A1*2` gives `100` instead of `1`. *Easy.*
+- [x] 6. **Dates are read as their year**: `2026-09-25` becomes `2026`, so `=A1+1` gives `2027`. *Easy to make an error; medium to support dates.* Now text, so arithmetic on a date is an error; actual date support is still open.
+- [x] 7. **Array results overwrite typed cells without warning.** `=[1;2;3]` writes over the cells below even if they contain values. Excel shows `#SPILL!`. *Easy.*
+- [x] 8. **A sign after a reference glues into a relative reference**: `=A1-1c+0r` gives `102` (10 followed by 2) instead of 8. *Easy.*
+- [x] 9. **Ratios like `2.5:1` are read as `2.5`** (and `1:1` as `1`). *Easy.*
 
 ## Excel formula compatibility
 

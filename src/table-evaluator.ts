@@ -3,7 +3,7 @@
 // Changes: scientific notation in cells and formulas, whitespace digit grouping,
 // grouping-separator fix, uppercase references, rows numbered after the header,
 // quoted quantities (="5 mL" * 3), format()/scientific() for units, scientific results
-// that follow their inputs, molar unit M, µ/μ micro prefix, dead code removed.
+// that follow their inputs, strict number parsing, percentages, #SPILL!, molar unit M, µ/μ micro prefix, dead code removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { create, all } from 'mathjs';
@@ -165,12 +165,20 @@ export class TableEvaluator {
         const normalized = String(str)
             .replace(/(\d)\s+(?=\d)/g, "$1")
             .replace(new RegExp(grouping.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
-            .replace(decimal, '.');
+            .replace(decimal, '.')
+            .trim();
 
+        // The whole string must be a number: parseFloat alone would read "2026-09-25" as
+        // 2026 and "2.5:1" as 2.5
+        if (!/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(normalized)) return NaN;
         return parseFloat(normalized);
     }
 
+    // The cell contents as typed, before any array results are written into the table
+    private gridData: string[][] = [];
+
     evaluateTable(gridData: string[][], settings?: any): TableResult {
+        this.gridData = gridData;
         // Set settings with defaults
         this.settings = settings || {
             decimalSeparator: ".",
@@ -391,6 +399,13 @@ export class TableEvaluator {
             return { value: this.parseLocaleNumber(cellContent), unit: null };
         }
 
+        // 50% -> 0.5
+        const percentMatch = cellContent.trim().match(/^(-?[\d,.\s]*\d(?:[eE][+-]?\d+)?)\s*%$/);
+        if (percentMatch) {
+            const value = this.parseLocaleNumber(percentMatch[1]) / 100;
+            if (isFinite(value)) return { value, unit: null };
+        }
+
         // The exponent must follow a digit, so "1.8e5" is a number but "3 e5" stays a (bad) unit
         const unitMatch = cellContent.trim().match(/^(-?[\d,.\s]*\d(?:[eE][+-]?\d+)?)\s*([a-zA-Zµμ]+.*)?$/);
         if (unitMatch) {
@@ -540,6 +555,21 @@ export class TableEvaluator {
         const ismatrix = parsed.every((item: any[]) => Array.isArray(item));
         //if (!ismatrix) parsed=[parsed];
         if (!ismatrix) parsed = parsed.map((n: any) => [n]);
+
+        // Like Excel's #SPILL!: don't overwrite cells that aren't empty. Copies of the same
+        // formula may be overwritten (nothing is lost), which keeps the pattern of repeating an
+        // array formula down a column working
+        const own = (this.gridData[row]?.[col] ?? "").trim();
+        const blocked = parsed.some((parsedRow: any[], i: number) => parsedRow.some((_: any, j: number) => {
+            const content = (this.gridData[row + i]?.[col + j] ?? "").trim();
+            return (i || j) && content !== "" && content !== own;
+        }));
+        if (blocked) {
+            this.errors[row][col] = "#SPILL!";
+            this.cellstatus[row][col] = cellstatus.iscomputed;
+            this.tableData[row][col] = null;
+            return null;
+        }
 
         this.copyArrayValues(parsed, this.tableData, row, col);
         //we assume here that this cell is computed
@@ -730,6 +760,13 @@ export class TableEvaluator {
                 const matchRangeCol = matchRef(/^[A-Z]:[A-Z]/); //column range
                 const matchRangeColMatrix = restformula.match(/^\[[A-Z]:[A-Z]\]/); //column range
                 const matchRangeRow = matchRef(/^\d+:\d+/); //row range
+
+                // A1-1c+0r: after a value, is "-" a minus or the sign of the relative reference?
+                // It used to be read as the sign, gluing 10 and 2 into 102; ask for brackets
+                const signedRef = (matchRange || matchCell)?.[0];
+                if (signedRef && /^[+-]/.test(signedRef) && /[A-Za-z0-9_.)\]]\s*$/.test(formula.slice(0, i))) {
+                    throw new Error(`ambiguous "${signedRef}": put it in brackets, e.g. ${signedRef[0]} (${signedRef})`);
+                }
 
                 if (matchRange) {
                     /* normal range a3:b7 or a-3:b+7, or anything in between;
