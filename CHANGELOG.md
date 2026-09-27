@@ -12,6 +12,7 @@ Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github
 ## [Unreleased]
 
 ### Added
+- **References follow inserted, deleted and moved rows and columns**, like Excel. Inserting a row above `s2` turns `=C2*D2` into `=C3*D3` and `=sum(C1:C3)` into `=sum(C1:C4)`; moving a row takes its references with it while totals keep covering the same rows; deleting a referenced row or column writes `#REF!` into the formula (`=C1*#REF!`). Works for Obsidian's table commands, the right-click menu, drag handles and rows pasted in source mode, and one undo reverts the edit and the rewrite together. Relative references (`+0c-1r`) stay positional, formulas in newly inserted rows are left as written, and a sort (many rows rearranged at once) leaves references on their positions
 - **Click a cell to insert its reference** (Live Preview), like Excel: while editing a formula with the cursor right after `=`, an operator, `(`, `,` or `:`, clicking another cell of the table inserts its reference (`=B1*` + click C1 → `=B1*C1`). Clicking again straight away replaces it; shift-click or dragging makes a range (`C1:C3`); a header cell inserts the whole column (`C:C`). Otherwise a click moves to the cell as before
 
 ### Changed

@@ -959,6 +959,10 @@ export class TableEvaluator {
             } else {
                 const restformula = formula.slice(i);
                 this.debug(`rest formula is:${restformula}`);
+                // written by table-structure.ts when a referenced row or column was deleted
+                if (restformula.startsWith("#REF!")) {
+                    throw new Error("#REF!: refers to a row or column that was deleted");
+                }
                 // a letter or _ before this point means we are inside a name such as log2 or LN2
                 const inName = i > 0 && /[A-Za-z_]/.test(formula[i - 1]);
                 const matchRef = (re: RegExp) => (inName ? null : restformula.match(re));

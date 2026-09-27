@@ -1,6 +1,7 @@
 // Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0. Changes:
-// - formulas read from the markdown source; header-row detection; uppercase labels
+// - references follow inserted, deleted and moved rows/columns; formulas read from the
+//   markdown source; header-row detection; uppercase labels
 //   numbered from the first row after the header
 // - Table Master compatibility (recompute after its rebuild, merged-cell positions)
 // - precision setting for unit results; scientific display of results; error details on hover
@@ -11,9 +12,11 @@
 
 import { Plugin, MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
 import { EditorView } from "@codemirror/view";
+import { EditorState, Transaction, TransactionSpec } from "@codemirror/state";
 import { CalcCraftSettingsTab, DefaultSettings } from "./settings";
 import { TableEvaluator, formatExponential, formatFixed, splitUnit } from "./table-evaluator";
-import { tableAtLine, tablesInLines } from "./table-source";
+import { cellSpans, sourceTables, tableAtLine, tableBlockAround, tablesInLines } from "./table-source";
+import { detectStructureChange, existedBefore, shiftReferences } from "./table-structure";
 
 const debug = false;
 
@@ -41,6 +44,7 @@ export default class CalcCraftPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		this.registerMarkdownPostProcessor(this.postProcessor.bind(this));
+		this.registerEditorExtension(EditorState.transactionFilter.of(tr => this.followStructureChanges(tr)));
 
 		// edit mode support:
 		this.settings_tab = new CalcCraftSettingsTab(this.app, this);
@@ -66,6 +70,49 @@ export default class CalcCraftPlugin extends Plugin {
 	onunload() {
 		// Table Master observers stay attached to rendered tables; make them no-ops
 		this.unloaded = true;
+	}
+
+	// When an edit inserts, deletes or moves rows or columns of a table, rewrite the table's
+	// formulas so their references keep pointing at the same cells (see table-structure.ts).
+	// As a transaction filter the rewrite is part of the same edit, so one undo reverts both;
+	// undo and redo themselves already restore the references.
+	private followStructureChanges(tr: Transaction): Transaction | readonly TransactionSpec[] {
+		if (!tr.docChanged || tr.isUserEvent("undo") || tr.isUserEvent("redo")) return tr;
+		const oldDoc = tr.startState.doc;
+		const newDoc = tr.newDoc;
+		const changes: { from: number; to: number; insert: string }[] = [];
+		const done = new Set<number>();
+		try {
+			tr.changes.iterChangedRanges((fromA, _toA, fromB) => {
+				const oldBlock = tableBlockAround(n => oldDoc.line(n + 1).text, oldDoc.lines, oldDoc.lineAt(fromA).number - 1);
+				const newBlock = tableBlockAround(n => newDoc.line(n + 1).text, newDoc.lines, newDoc.lineAt(fromB).number - 1);
+				if (!oldBlock || !newBlock || done.has(newBlock.start)) return;
+				done.add(newBlock.start);
+				const before = sourceTables(oldBlock.lines, oldBlock.start);
+				const after = sourceTables(newBlock.lines, newBlock.start);
+				if (before.length !== 1 || after.length !== 1) return;
+				const change = detectStructureChange(before[0].rows, after[0].rows);
+				if (!change) return;
+				// only formulas that were there before; inserted rows/columns are new content
+				const oldRows = existedBefore(change.rows);
+				const oldCols = existedBefore(change.cols);
+				after[0].rows.forEach((row, r) => {
+					if (!oldRows[r]) return;
+					const line = newDoc.line(after[0].rowLines[r] + 1);
+					const spans = cellSpans(line.text);
+					row.forEach((text, c) => {
+						// cells with escaped pipes don't line up with their spans; leave them
+						if (!oldCols[c] || !text.startsWith("=") || text.includes("|") || !spans[c]) return;
+						const shifted = shiftReferences(text, change, before[0].headerRows, after[0].headerRows);
+						if (shifted !== text) changes.push({ from: line.from + spans[c].from, to: line.from + spans[c].to, insert: shifted });
+					});
+				});
+			});
+		} catch (error) {
+			console.error("CalcCraft: couldn't update references", error);
+			return tr;
+		}
+		return changes.length ? [tr, { changes, sequential: true }] : tr;
 	}
 
 	private extractCssClasses(frontmatter: any): string[] {

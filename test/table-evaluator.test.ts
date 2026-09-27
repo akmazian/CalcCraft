@@ -770,3 +770,11 @@ describe("TODO 12: Excel error codes", () => {
 		assert.equal(cell([["a", "b"], ["=1/0", "=SUM(A1:A2)"], ["2", ""]], 1, 1).error, "#DIV/0!");
 	});
 });
+
+describe("TODO 4: #REF! written into a formula", () => {
+	test("a formula containing #REF! shows #REF!", () => {
+		const res = run([["a", "b"], ["2", "=A1*#REF!"]]);
+		assert.equal(res.errors[1][1], "#REF!");
+		assert.match(String(res.result.errorDetails[1][1]), /deleted/);
+	});
+});
