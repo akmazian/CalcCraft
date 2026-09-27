@@ -5,11 +5,12 @@
 // - Table Master compatibility (recompute after its rebuild, merged-cell positions)
 // - precision setting for unit results; scientific display of results; error details on hover
 // - no colour, border or hover underline on computed cells; cells keep their width while
-//   edited; Enter in the last row leaves the table
+//   edited; Enter in the last row leaves the table; click a cell to insert its reference
 // - dead label code and debug logging removed
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { Plugin, MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
+import { EditorView } from "@codemirror/view";
 import { CalcCraftSettingsTab, DefaultSettings } from "./settings";
 import { TableEvaluator, formatExponential, formatFixed, splitUnit } from "./table-evaluator";
 import { tableAtLine, tablesInLines } from "./table-source";
@@ -33,6 +34,9 @@ export default class CalcCraftPlugin extends Plugin {
 	private cssClassCache = new Map<string, string[]>();
 
 	private unloaded = false;
+
+	// The reference last inserted by clicking a cell while editing a formula (see pointAtCell)
+	private pointer: { view: EditorView; from: number; text: string; anchor: [number, number] } | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -653,6 +657,27 @@ export default class CalcCraftPlugin extends Plugin {
 			root.removeEventListener("keydown", onKeyDown, true);
 		});
 
+		// Excel-style pointing: clicking a cell while editing a formula inserts its reference.
+		// Obsidian's table editor moves to a cell on pointerdown, so act there and swallow the
+		// rest of that click.
+		let swallowing = false;
+		const onPointerDown = (e: PointerEvent) => {
+			swallowing = this.pointAtCell(e);
+		};
+		const swallow = (e: Event) => {
+			if (!swallowing) return;
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			if (e.type === "click") swallowing = false;
+		};
+		root.addEventListener("pointerdown", onPointerDown, true);
+		const swallowed = ["mousedown", "pointerup", "mouseup", "click"];
+		swallowed.forEach(type => root.addEventListener(type, swallow, true));
+		this.lpCleanup.push(() => {
+			root.removeEventListener("pointerdown", onPointerDown, true);
+			swallowed.forEach(type => root.removeEventListener(type, swallow, true));
+		});
+
 		// Recompute on DOM changes (childList only, debounced)
 		const mo = new MutationObserver((mutations) => {
 			// if editing inside a table widget, do not recompute
@@ -675,6 +700,86 @@ export default class CalcCraftPlugin extends Plugin {
 		// Initial pass
 		this.recomputeLivePreview();
 	};
+
+	// Like Excel: while editing a formula with the cursor right after =, an operator, ( , or :,
+	// clicking another cell of the same table inserts its reference instead of moving there.
+	// Clicking again straight away replaces it; shift-click or dragging makes a range. A
+	// header cell inserts its whole column (A:A).
+	// Returns whether the click was used for pointing
+	private pointAtCell(e: PointerEvent): boolean {
+		if (e.button !== 0) return false;
+		const editingWrapper = (document.activeElement as HTMLElement | null)?.closest?.(".cm-table-widget .table-cell-wrapper");
+		const target = (e.target as HTMLElement | null)?.closest?.("td, th") as HTMLElement | null;
+		const table = target?.closest("table");
+		const editingCell = editingWrapper?.closest("td, th");
+		if (!editingWrapper || !target || !table || !editingCell || editingCell === target || editingCell.closest("table") !== table) return false;
+
+		const view = EditorView.findFromDOM(editingWrapper as HTMLElement);
+		const position = this.cellPosition(table, target);
+		if (!view || !position) return false;
+		const text = view.state.doc.toString();
+		const head = view.state.selection.main.head;
+		if (!text.trimStart().startsWith("=")) return false;
+
+		let from = head;
+		let to = head;
+		let anchor = position;
+		const last = this.pointer;
+		if (last?.view === view && last.from + last.text.length === head && text.slice(last.from, head) === last.text) {
+			// still right after the reference we inserted: replace it, or extend it with shift
+			from = last.from;
+			if (e.shiftKey) anchor = last.anchor;
+		} else if (!/(^\s*=|[=+\-*/^(,:<>&;]\s*)$/.test(text.slice(0, head))) {
+			return false; // not pointing: the click moves to that cell as usual
+		}
+
+		e.preventDefault();
+		e.stopImmediatePropagation();
+		const insert = (ref: string) => {
+			view.dispatch({ changes: { from, to, insert: ref }, selection: { anchor: from + ref.length } });
+			to = from + ref.length;
+			this.pointer = { view, from, text: ref, anchor };
+		};
+		insert(this.rangeReference(table, anchor, position));
+
+		// dragging across cells turns it into a range (pointer capture may retarget events,
+		// so find the cell under the pointer)
+		const onMove = (ev: PointerEvent) => {
+			const under = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+			const over = under?.closest?.("td, th") as HTMLElement | null;
+			const p = over && over.closest("table") === table ? this.cellPosition(table, over) : null;
+			if (p) insert(this.rangeReference(table, anchor, p));
+		};
+		const onUp = () => {
+			document.removeEventListener("pointermove", onMove, true);
+			document.removeEventListener("pointerup", onUp, true);
+		};
+		document.addEventListener("pointermove", onMove, true);
+		document.addEventListener("pointerup", onUp, true);
+		return true;
+	}
+
+	// Grid position of a cell element
+	private cellPosition(table: HTMLTableElement, cell: HTMLElement): [number, number] | null {
+		const cells = this.tableCells(table);
+		for (let r = 0; r < cells.length; r++) {
+			const c = cells[r].indexOf(cell);
+			if (c >= 0) return [r, c];
+		}
+		return null;
+	}
+
+	// A1, or A1:B3 between two grid positions; header cells mean whole columns (A:B)
+	private rangeReference(table: HTMLTableElement, a: [number, number], b: [number, number]): string {
+		const headerRows = this.countHeaderRows(table);
+		const column = (c: number) => String.fromCharCode(65 + c);
+		const [c1, c2] = [Math.min(a[1], b[1]), Math.max(a[1], b[1])];
+		if (a[0] < headerRows || b[0] < headerRows) return `${column(c1)}:${column(c2)}`;
+		const [r1, r2] = [Math.min(a[0], b[0]), Math.max(a[0], b[0])].map(r => r - headerRows + 1);
+		const start = `${column(c1)}${r1}`;
+		const end = `${column(c2)}${r2}`;
+		return start === end ? start : `${start}:${end}`;
+	}
 
 	// Move the cursor to the start of the line below a Live Preview table, adding that
 	// line if the table ends the note

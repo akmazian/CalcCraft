@@ -6,7 +6,7 @@ Behaviour described as of `2.3.7-fork.2`. Difficulty is a rough guess.
 
 - [x] 1. **Hover underline.** Hovering a cell underlines it (CalcCraft's `td.cell-active` style, not Obsidian's). *Easy.*
 - [x] 2. **Cell width jumps.** While editing, a cell widens to fit the formula, then shrinks to the result after it is computed. Excel keeps column widths fixed. Options: never shrink below the width the formula needed, or don't widen while typing (let the formula scroll inside the cell). *Medium.* Done: the cell keeps its size and the text being typed runs over the neighbouring cells.
-- [ ] 3. **`=` then click a cell to insert its reference.** Clicking another cell while editing just moves editing there. While editing a formula, a click should insert the clicked cell's reference (shift-click or drag for a range). Depends on Obsidian's undocumented table editor. *Medium.*
+- [x] 3. **`=` then click a cell to insert its reference.** Clicking another cell while editing just moves editing there. While editing a formula, a click should insert the clicked cell's reference (shift-click or drag for a range). Depends on Obsidian's undocumented table editor. *Medium.*
 
 ## Silently wrong numbers
 

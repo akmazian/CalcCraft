@@ -11,6 +11,9 @@ Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github
 
 ## [Unreleased]
 
+### Added
+- **Click a cell to insert its reference** (Live Preview), like Excel: while editing a formula with the cursor right after `=`, an operator, `(`, `,` or `:`, clicking another cell of the table inserts its reference (`=B1*` + click C1 → `=B1*C1`). Clicking again straight away replaces it; shift-click or dragging makes a range (`C1:C3`); a header cell inserts the whole column (`C:C`). Otherwise a click moves to the cell as before
+
 ### Changed
 - **Cells no longer widen while you type** (Live Preview): the cell keeps the size of what it showed, and the text you're typing runs over the neighbouring cells, like in Excel. The column resizes once, to the new result, when you finish
 - **Excel function names, in any case**: `SUM`, `Sum` and `sum` are the same. Excel functions: `SUM`, `AVERAGE`, `MIN`, `MAX`, `MEDIAN`, `PRODUCT`, `COUNT`, `COUNTA`, `STDEV`, `STDEVP`, `VAR`, `VARP`, `IF`, `AND`, `OR`, `NOT`, `TRUE`, `FALSE`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `TRUNC`, `INT`, `FLOOR`, `CEILING`, `MOD`, `ABS`, `SIGN`, `SQRT`, `POWER`, `EXP`, `LN`, `LOG`, `LOG10`, `PI`. Other math.js functions keep working in any case (`TRANSPOSE`, `DotMultiply`)

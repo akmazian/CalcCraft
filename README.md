@@ -46,6 +46,9 @@ the row-column notation is intended to be used mainly as a relative reference, f
 
 summing all the values in the curent column from the first row to the cell above the curent one:  `=sum(+0c1:+0c-1r)`
 
+#### Pointing at cells
+In Live Preview you can build a formula by clicking, like in Excel: type `=` (or an operator such as `*`, or `(`), then click a cell to insert its reference. Click again to replace it, shift-click or drag for a range, or click a header cell for the whole column.
+
 #### Highlight involved cells
 The cells that influence the curent cell, are called `parents`, and the ones that depend on the curent cell are called `children`. Hovering the mouse over a cell, shows both the parents and the children, in customizable colors. This makes it easier to track the flow of data in the sheet. The colors can be customized for the dark theme and for the light theme.
 ### Highlighting errors
