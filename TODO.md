@@ -19,9 +19,9 @@ Behaviour described as of `2.3.7-fork.2`. Difficulty is a rough guess.
 
 ## Excel formula compatibility
 
-- [ ] 10. **Function names are lowercase math.js names.** `SUM`, `IF`, `AVERAGE` are "undefined function"; `sum` and `mean` work, and conditions need `A1>1 ? 2 : 3`. Accept any case and map Excel names to math.js. *Easy.*
-- [ ] 11. **Missing Excel functions.** `COUNT` over a range errors; no `COUNTIF`/`SUMIF`, `VLOOKUP`/`XLOOKUP`, `ROUND` on units, text functions. *Medium, one at a time.*
-- [ ] 12. **Errors aren't Excel-style.** `=1/0` shows `Infinity` instead of `#DIV/0!`; messages like "cell out of table" or "Undefined symbol" instead of `#REF!` / `#NAME?`. *Easy.*
+- [x] 10. **Function names are lowercase math.js names.** `SUM`, `IF`, `AVERAGE` are "undefined function"; `sum` and `mean` work, and conditions need `A1>1 ? 2 : 3`. Accept any case and map Excel names to math.js. *Easy.*
+- [ ] 11. **Missing Excel functions.** ~~`COUNT` over a range errors~~, ~~`ROUND` on units~~ (done with 10); still no `COUNTIF`/`SUMIF`, `VLOOKUP`/`XLOOKUP`, text functions, dates. *Medium, one at a time.*
+- [x] 12. **Errors aren't Excel-style.** `=1/0` shows `Infinity` instead of `#DIV/0!`; messages like "cell out of table" or "Undefined symbol" instead of `#REF!` / `#NAME?`. *Easy.*
 - [ ] 13. **No `$A$1` absolute references, and no fill down / fill right.** Copying a formula doesn't shift its references. *Medium.*
 - [ ] 14. **Only columns A–Z.** `AA1` is an error. *Easy-medium.*
 - [ ] 15. **No references to other tables or notes.** *Medium-hard.*

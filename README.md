@@ -27,7 +27,9 @@ The table is divided in columns (labeled from 'A' to 'Z') and numbered rows. Row
 
 After expanding the expressions are evaluated using  [mathjs](https://mathjs.org/docs/reference/functions.html), therefore supporting many functions from there. Ranges between `[ ... ]` are expanded as matrices, and can be used for matrix operations.
 ### operations
-most of the functions from [mathjs](https://mathjs.org/docs/reference/functions.html) are supported.
+Excel functions work in any case, with Excel's meaning: `SUM`, `AVERAGE`, `MIN`, `MAX`, `MEDIAN`, `PRODUCT`, `COUNT`, `COUNTA`, `STDEV`, `IF`, `AND`, `OR`, `NOT`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `INT`, `FLOOR`, `CEILING`, `MOD`, `SQRT`, `POWER`, `LN`, `LOG` (base 10), and more. Aggregates skip blank cells, and `=IF(A1=0, "zero", "other")` / `A1<>0` compare like Excel.
+Most other functions from [mathjs](https://mathjs.org/docs/reference/functions.html) are supported too, in any case.
+Errors show Excel codes (`#DIV/0!`, `#REF!`, `#NAME?`, `#VALUE!`, `#NUM!`, `#SPILL!`, `#CIRCULAR!`); hover the cell for the reason.
 ### Real-time Formula Evaluation in Edit Mode
 - **Edit Mode**: Formulas remain visible while editing, with computed values shown as overlays
 - **Reading Mode**: Clean display with computed results only

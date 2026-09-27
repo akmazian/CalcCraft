@@ -3,7 +3,8 @@
 // Changes: scientific notation in cells and formulas, whitespace digit grouping,
 // grouping-separator fix, uppercase references, rows numbered after the header,
 // quoted quantities (="5 mL" * 3), format()/scientific() for units, scientific results
-// that follow their inputs, strict number parsing, percentages, #SPILL!, molar unit M, µ/μ micro prefix, dead code removed.
+// that follow their inputs, strict number parsing, percentages, #SPILL!, Excel
+// functions and error codes, molar unit M, µ/μ micro prefix, dead code removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { create, all } from 'mathjs';
@@ -113,6 +114,189 @@ for (const prefixes of Object.values(Unit.PREFIXES) as any[]) {
 // Molar concentration, with prefixes: M, mM, µM, nM
 math.createUnit("M", { definition: "1 mol/L", prefixes: "short" });
 
+// ---------------------------------------------------------------- Excel functions
+
+// An error with an Excel code, e.g. new Error("#DIV/0!: no numbers to average")
+const excelError = (code: string, reason: string) => new Error(`${code}: ${reason}`);
+
+// Blank cells arrive as null inside aggregate functions (see BLANK_SKIPPING); drop them,
+// and flatten ranges and matrices into a plain list
+const flatValues = (args: any[]): any[] => args
+    .flatMap(a => (math.isMatrix(a) ? (a as any).toArray().flat(Infinity) : Array.isArray(a) ? a.flat(Infinity) : [a]))
+    .filter(v => v !== null && v !== undefined);
+// Like Excel, text and TRUE/FALSE in ranges are ignored by numeric aggregates
+const numbers = (args: any[]) => flatValues(args).filter(v => typeof v === "number" || math.isUnit(v));
+
+// Apply a numeric function to a number, or to a unit's value in its own unit (1.2345 mL)
+const onValue = (x: any, f: (n: number) => number) => {
+    if (math.isUnit(x)) {
+        const units = (x as any).formatUnits();
+        return math.unit(f((x as any).toNumber(units)), units);
+    }
+    return f(x);
+};
+
+// Round a quotient that is a whole number up to float noise (0.3 / 0.1 = 2.9999999999999996)
+const cleanQuotient = (q: number) => (Math.abs(q - Math.round(q)) < 1e-9 ? Math.round(q) : q);
+const toMultiple = (x: number, significance: number, round: (q: number) => number) => {
+    if (significance === 0) return 0;
+    return math.round(round(cleanQuotient(x / significance)) * significance, 12) as number;
+};
+const roundAway = (n: number, digits: number, up: boolean) => {
+    const f = Math.pow(10, digits);
+    const scaled = math.round(Math.abs(n) * f, 9) as number;
+    return (Math.sign(n) * (up ? Math.ceil(scaled) : Math.floor(scaled))) / f;
+};
+const excelRound = (n: number, digits: number) =>
+    digits >= 0 ? (math.round(n, digits) as number) : (math.round(n / Math.pow(10, -digits)) as number) * Math.pow(10, -digits);
+
+const EXCEL_FUNCTIONS: Record<string, (...args: any[]) => any> = {
+    SUM: (...args: any[]) => (math as any).sum(...args),
+    AVERAGE: (...args: any[]) => {
+        const v = numbers(args);
+        if (!v.length) throw excelError("#DIV/0!", "no numbers to average");
+        return math.mean(v);
+    },
+    MIN: (...args: any[]) => { const v = numbers(args); return v.length ? math.min(v) : 0; },
+    MAX: (...args: any[]) => { const v = numbers(args); return v.length ? math.max(v) : 0; },
+    MEDIAN: (...args: any[]) => {
+        const v = numbers(args);
+        if (!v.length) throw excelError("#NUM!", "no numbers");
+        return math.median(v);
+    },
+    PRODUCT: (...args: any[]) => { const v = numbers(args); return v.length ? math.prod(v) : 0; },
+    COUNT: (...args: any[]) => numbers(args).length,
+    COUNTA: (...args: any[]) => flatValues(args).length,
+    STDEV: (...args: any[]) => {
+        const v = numbers(args);
+        if (v.length < 2) throw excelError("#DIV/0!", "STDEV needs at least two numbers");
+        return math.std(v);
+    },
+    STDEVP: (...args: any[]) => {
+        const v = numbers(args);
+        if (!v.length) throw excelError("#DIV/0!", "no numbers");
+        return math.std(v, "uncorrected");
+    },
+    VAR: (...args: any[]) => {
+        const v = numbers(args);
+        if (v.length < 2) throw excelError("#DIV/0!", "VAR needs at least two numbers");
+        return math.variance(v);
+    },
+    VARP: (...args: any[]) => {
+        const v = numbers(args);
+        if (!v.length) throw excelError("#DIV/0!", "no numbers");
+        return math.variance(v, "uncorrected");
+    },
+    IF: (condition: any, ifTrue: any, ifFalse: any = false) => (condition ? ifTrue : ifFalse),
+    AND: (...args: any[]) => {
+        const v = flatValues(args).filter(x => typeof x !== "string");
+        if (!v.length) throw excelError("#VALUE!", "no values");
+        return v.every(Boolean);
+    },
+    OR: (...args: any[]) => {
+        const v = flatValues(args).filter(x => typeof x !== "string");
+        if (!v.length) throw excelError("#VALUE!", "no values");
+        return v.some(Boolean);
+    },
+    NOT: (x: any) => !x,
+    TRUE: () => true,
+    FALSE: () => false,
+    ROUND: (x: any, digits = 0) => onValue(x, n => excelRound(n, digits)),
+    ROUNDUP: (x: any, digits = 0) => onValue(x, n => roundAway(n, digits, true)),
+    ROUNDDOWN: (x: any, digits = 0) => onValue(x, n => roundAway(n, digits, false)),
+    TRUNC: (x: any, digits = 0) => onValue(x, n => roundAway(n, digits, false)),
+    INT: (x: any) => onValue(x, Math.floor),
+    FLOOR: (x: any, significance = 1) => onValue(x, n => toMultiple(n, significance, Math.floor)),
+    CEILING: (x: any, significance = 1) => onValue(x, n => toMultiple(n, significance, Math.ceil)),
+    MOD: (n: any, d: any) => {
+        if (d === 0) throw excelError("#DIV/0!", "MOD by zero");
+        return math.mod(n, d);
+    },
+    ABS: (x: any) => math.abs(x),
+    SIGN: (x: any) => math.sign(x),
+    SQRT: (x: any) => {
+        if (typeof x === "number" && x < 0) throw excelError("#NUM!", "square root of a negative number");
+        return math.sqrt(x);
+    },
+    POWER: (x: any, y: any) => math.pow(x, y),
+    EXP: (x: any) => math.exp(x),
+    LN: (x: any) => {
+        if (typeof x === "number" && x <= 0) throw excelError("#NUM!", "logarithm of a number that isn't positive");
+        return math.log(x);
+    },
+    LOG: (x: any, base = 10) => {
+        if (typeof x === "number" && x <= 0) throw excelError("#NUM!", "logarithm of a number that isn't positive");
+        return math.log(x, base);
+    },
+    LOG10: (x: any) => {
+        if (typeof x === "number" && x <= 0) throw excelError("#NUM!", "logarithm of a number that isn't positive");
+        return math.log10(x);
+    },
+    PI: () => Math.PI,
+};
+
+// math.js aggregates without an Excel name also skip blank cells
+const MATHJS_AGGREGATES: Record<string, (...args: any[]) => any> = {
+    mean: (...args: any[]) => math.mean(flatValues(args)),
+    prod: (...args: any[]) => math.prod(flatValues(args)),
+    std: (...args: any[]) => math.std(flatValues(args)),
+    variance: (...args: any[]) => math.variance(flatValues(args)),
+    mode: (...args: any[]) => math.mode(flatValues(args)),
+};
+
+math.import({
+    ...Object.fromEntries(Object.entries(EXCEL_FUNCTIONS).map(([name, f]) => [`excel_${name}`, f])),
+    ...Object.fromEntries(Object.entries(MATHJS_AGGREGATES).map(([name, f]) => [`cc_${name}`, f])),
+    TRUE: true,
+    FALSE: false,
+}, { override: true });
+
+// Functions whose ranges skip blank cells instead of reading them as 0
+const BLANK_SKIPPING = new Set([
+    "sum",
+    ...["SUM", "AVERAGE", "MIN", "MAX", "MEDIAN", "PRODUCT", "COUNT", "COUNTA", "STDEV", "STDEVP", "VAR", "VARP", "AND", "OR"].map(n => `excel_${n}`),
+    ...Object.keys(MATHJS_AGGREGATES).map(n => `cc_${n}`),
+]);
+
+// math.js functions by lowercase name, so any capitalisation works (TRANSPOSE, DotMultiply)
+const MATHJS_FUNCTIONS = new Map(
+    Object.keys(math)
+        .filter(name => typeof (math as any)[name] === "function" && /^[a-z]/.test(name))
+        .map(name => [name.toLowerCase(), name])
+);
+
+// The function a name in a formula refers to: Excel's meaning whatever the case (LOG is base
+// 10, like log), then math.js's functions in any case
+export function resolveFunction(name: string): string {
+    const upper = name.toUpperCase();
+    if (EXCEL_FUNCTIONS[upper]) return upper === "SUM" ? "sum" : `excel_${upper}`;
+    const lower = name.toLowerCase();
+    if (MATHJS_AGGREGATES[lower]) return `cc_${lower}`;
+    return MATHJS_FUNCTIONS.get(lower) ?? name;
+}
+
+// Excel-style comparisons: A1=0 and A1<>0 become math.js's == and != (outside quoted text)
+function excelComparisons(formula: string): string {
+    return formula.replace(/"[^"]*"|<>|(?<![<>!=])=(?!=)/g, m => (m.startsWith('"') ? m : m === "<>" ? "!=" : "=="));
+}
+
+// The Excel error code for an error message
+export function errorCode(message: string): string {
+    const code = message.match(/^#[A-Z0-9/]+[!?]/);
+    if (code) return code[0];
+    if (/outside the table|invalid (cell|range) reference/i.test(message)) return "#REF!";
+    if (/loop|circular/i.test(message)) return "#CIRCULAR!";
+    if (/Undefined (function|symbol)/.test(message)) return "#NAME?";
+    if (/ambiguous|Syntax error|Unexpected end|Parenthesis|Value expected|Unexpected operator|Unexpected character|recursivity/.test(message)) return "#ERROR!";
+    return "#VALUE!";
+}
+
+// Error messages without our internal function names
+const readableReason = (message: string) => message
+    .replace(/^#[A-Z0-9/]+[!?]: /, "")
+    .replace(/excel_([A-Z0-9]+)/g, "$1")
+    .replace(/cc_(\w+)/g, "$1");
+
 enum celltype {
     number = 1,
     formula,
@@ -125,6 +309,14 @@ enum cellstatus {
     iscomputed
 }
 
+// Thrown to a formula that uses a cell with an error, so the error propagates like in Excel
+class CellError extends Error {
+    constructor(public code: string, public reason: string) {
+        super(`${code}: ${reason}`);
+        this.name = "CellError";
+    }
+}
+
 class InfiniteLoop extends Error {
     constructor(message: string) {
         super(message);
@@ -135,7 +327,9 @@ class InfiniteLoop extends Error {
 
 export interface TableResult {
     values: any[][];
+    // Excel error codes (#DIV/0!, #REF!, ...), with the full reason in errorDetails
     errors: (string | null)[][];
+    errorDetails: (string | null)[][];
     cellTypes: celltype[][];
     // Show this cell's result in scientific notation (its inputs are written that way)
     scientific: boolean[][];
@@ -147,6 +341,7 @@ export class TableEvaluator {
     celltype: celltype[][] = [];
     cellstatus: cellstatus[][] = [];
     errors: (string | null)[][] = [];
+    errorDetails: (string | null)[][] = [];
     parents: [number, number][][][] = [];
     children: [number, number][][][] = [];
     maxcols = 0;
@@ -192,6 +387,7 @@ export class TableEvaluator {
         this.celltype = [];
         this.cellstatus = [];
         this.errors = [];
+        this.errorDetails = [];
         this.parents = [];
         this.children = [];
         this.maxcols = 0;
@@ -209,6 +405,7 @@ export class TableEvaluator {
         return {
             values: this.tableData,
             errors: this.errors,
+            errorDetails: this.errorDetails,
             cellTypes: this.celltype,
             scientific: this.markScientific(gridData)
         };
@@ -258,12 +455,14 @@ export class TableEvaluator {
             this.celltype[rowIndex] = [];
             this.cellstatus[rowIndex] = [];
             this.errors[rowIndex] = [];
+            this.errorDetails[rowIndex] = [];
             this.parents[rowIndex] = [];
             this.children[rowIndex] = [];
 
             for (let colIndex = 0; colIndex < this.maxcols; colIndex++) {
                 this.cellstatus[rowIndex][colIndex] = cellstatus.none;
                 this.errors[rowIndex][colIndex] = null;
+                this.errorDetails[rowIndex][colIndex] = null;
                 this.parents[rowIndex][colIndex] = [];
                 this.children[rowIndex][colIndex] = [];
                 this.tableData[rowIndex][colIndex] = null;
@@ -323,7 +522,8 @@ export class TableEvaluator {
                 try {
                     this.getValueByCoordinates(i, j);
                 } catch (error) {
-                    console.log(error);
+                    // cell errors and loops are recorded on the cells themselves
+                    if (!(error instanceof CellError || error instanceof InfiniteLoop)) console.log(error);
                 }
             }
         }
@@ -332,6 +532,23 @@ export class TableEvaluator {
 
 
 
+
+    // Record an error on a cell: its Excel code, and the reason shown on hover
+    private setError(row: number, col: number, message: string) {
+        this.errors[row][col] = errorCode(message);
+        this.errorDetails[row][col] = readableReason(message);
+        this.cellstatus[row][col] = cellstatus.iscomputed;
+        this.tableData[row][col] = null;
+    }
+
+    // The error to throw to a formula that uses this (errored) cell
+    private propagatedError(row: number, col: number): CellError {
+        return new CellError(this.errors[row][col] as string, `${this.cords2ref(row, col)}: ${this.errorDetails[row][col]}`);
+    }
+
+    private isBlank(row: number, col: number): boolean {
+        return this.tableData[row][col] === null && !this.errors[row][col];
+    }
 
     bool2nr(value: any): any {
         return typeof value === "boolean" ? +value : value;
@@ -350,10 +567,7 @@ export class TableEvaluator {
     ref2cords(ref: string, formulaRow = 0, formulaCol = 0): [number, number] | null {
         const match = ref.match(/^([A-Z]+|([+-]?)\d+c)(\d+|([+-]?)\d+r)$/);
 
-        if (!match) {
-            this.errors[formulaRow][formulaCol] = "invalid cell reference";
-            return null;
-        }
+        if (!match) return null;
 
         const [, colPart, altColPart, rowPart, altRowPart] = match;
 
@@ -431,6 +645,7 @@ export class TableEvaluator {
 
         if (this.cellstatus[row][col] == cellstatus.iscomputed) {
             this.debug(`getValueByCoordinates giving the value ${this.tableData[row][col]}`);
+            if (this.errors[row][col]) throw this.propagatedError(row, col);
             const val = this.tableData[row][col];
 
             if (val === null) return 0;
@@ -474,15 +689,14 @@ export class TableEvaluator {
 
             let processedformula;
             try {
-                processedformula = this.unquoteUnits(this.parsefunction(formula, [row, col]));
+                processedformula = this.unquoteUnits(this.parsefunction(excelComparisons(formula), [row, col]));
             } catch (error) {
                 if (error instanceof InfiniteLoop) {
-                    const ref = this.cords2ref(row, col);
-                    this.errors[row][col] = "loop\n" + error.message;
-                    throw new InfiniteLoop(`${ref}`);
+                    this.setError(row, col, `circular reference through ${error.message}`);
+                    throw new InfiniteLoop(`${r}`);
                 }
-                this.errors[row][col] = error.message;
-                throw error;
+                this.setError(row, col, error.message);
+                throw this.propagatedError(row, col);
             }
 
             try {
@@ -505,6 +719,7 @@ export class TableEvaluator {
 
                 // Handle mathjs Unit objects
                 if (result && typeof result === "object" && result.constructor?.name === "Unit") {
+                    if (result.value !== null && !isFinite(result.value)) throw excelError("#DIV/0!", "division by zero");
                     this.cellstatus[row][col] = cellstatus.iscomputed;
                     this.tableData[row][col] = result;
                     return result;
@@ -527,16 +742,18 @@ export class TableEvaluator {
                     }
                 }
 
-                // Regular scalar result
+                // Regular scalar result; 1/0 is Infinity in math.js but #DIV/0! in Excel
+                if (typeof result === "number" && !isFinite(result)) {
+                    throw isNaN(result) ? excelError("#NUM!", "not a number") : excelError("#DIV/0!", "division by zero");
+                }
                 this.cellstatus[row][col] = cellstatus.iscomputed;
                 this.tableData[row][col] = result;
                 return result;
             } catch (error) {
-                this.errors[row][col] = error.message;
-                this.cellstatus[row][col] = cellstatus.iscomputed;
-                this.tableData[row][col] = null;
                 this.debug(`error computing cell ${r}`);
-                return null;
+                const message = error instanceof InfiniteLoop ? `circular reference through ${error.message}` : error.message;
+                this.setError(row, col, message);
+                throw this.propagatedError(row, col);
             }
         }
     }
@@ -560,16 +777,12 @@ export class TableEvaluator {
         // formula may be overwritten (nothing is lost), which keeps the pattern of repeating an
         // array formula down a column working
         const own = (this.gridData[row]?.[col] ?? "").trim();
-        const blocked = parsed.some((parsedRow: any[], i: number) => parsedRow.some((_: any, j: number) => {
+        parsed.forEach((parsedRow: any[], i: number) => parsedRow.forEach((_: any, j: number) => {
             const content = (this.gridData[row + i]?.[col + j] ?? "").trim();
-            return (i || j) && content !== "" && content !== own;
+            if ((i || j) && content !== "" && content !== own) {
+                throw new CellError("#SPILL!", `the result would overwrite ${this.cords2ref(row + i, col + j)}`);
+            }
         }));
-        if (blocked) {
-            this.errors[row][col] = "#SPILL!";
-            this.cellstatus[row][col] = cellstatus.iscomputed;
-            this.tableData[row][col] = null;
-            return null;
-        }
 
         this.copyArrayValues(parsed, this.tableData, row, col);
         //we assume here that this cell is computed
@@ -590,7 +803,8 @@ export class TableEvaluator {
                             this.cleanupchildren([row + i, col + j], [row, col]); //the children of this (and their children...) will be marked as not computed
                         } catch (error) {
                             if (error instanceof InfiniteLoop) {
-                                this.errors[row][col] = error.message;
+                                this.errors[row][col] = "#CIRCULAR!";
+                                this.errorDetails[row][col] = readableReason(error.message);
                             } else {
                                 throw error;
                             }
@@ -679,7 +893,12 @@ export class TableEvaluator {
         }
         this.children[row][col].forEach(([r, c]) => {
             if (this.cellstatus[r][c] !== cellstatus.iscomputed) {
-                const res = this.getValueByCoordinates(r, c);
+                let res;
+                try {
+                    res = this.getValueByCoordinates(r, c);
+                } catch (error) {
+                    if (!(error instanceof CellError)) throw error; // recorded on that cell
+                }
                 this.debug(`value for ${this.cords2ref(r, c)} is ${res} `);
                 this.debug(`status for ${this.cords2ref(r, c)} is ${this.cellstatus[r][c]} `);
                 this.computechildren(r, c);
@@ -688,18 +907,19 @@ export class TableEvaluator {
     }
 
 
-    getValuebyReference(ref: string, formulaRow = 0, formulaCol = 0): string | number {
+    getValuebyReference(ref: string, formulaRow = 0, formulaCol = 0, skipBlanks = false): string | number {
         const coords = this.ref2cords(ref, formulaRow, formulaCol);
-        if (!coords) throw new Error("invalid cell reference");
+        if (!coords) throw new Error(`invalid cell reference ${ref}`);
         const [row, col] = coords;
         if (row < 0 || row > this.maxrows - 1 || col < 0 || col > this.maxcols - 1) {
-            throw new Error("cell\nout of\ntable");
+            throw new Error(`${ref} is outside the table`);
         }
         this.parents[formulaRow][formulaCol].push([row, col]);
 
         //this.debug(`{cords2ref[row,col]} is a parent of {cords2ref(formulaRow,formulaCol)}`);
         this.children[row][col].push([formulaRow, formulaCol]);
-        return this.getValueByCoordinates(row, col);
+        const value = this.getValueByCoordinates(row, col);
+        return skipBlanks && this.isBlank(row, col) ? "null" : value;
     }
 
     findclosingbracket(formula: string): string {
@@ -716,7 +936,8 @@ export class TableEvaluator {
         return contentInsideParenthesis;
     }
 
-    parsefunction(formula: string, pos: [number, number] = [0, 0]): string {
+    // skipBlanks: inside an aggregate function, blank cells become null and are skipped
+    parsefunction(formula: string, pos: [number, number] = [0, 0], skipBlanks = false): string {
         //these are the position of the calling cell; useful for relative coordinates
         //also for puting asside the reference list for higlighting
         const [formulaRow, formulaCol] = pos;
@@ -730,7 +951,7 @@ export class TableEvaluator {
                 //look inside paranthesis, end expand them, recursively
                 const contentInsideParenthesis = this.findclosingbracket(formula.slice(i + 1));
                 //we call here the same function with the parantheses contents
-                const res = this.parsefunction(contentInsideParenthesis, [formulaRow, formulaCol]);
+                const res = this.parsefunction(contentInsideParenthesis, [formulaRow, formulaCol], skipBlanks);
                 results += "(" + res + ")";
                 i += contentInsideParenthesis.length + 2;
                 this.debug(`${contentInsideParenthesis}`);
@@ -753,7 +974,7 @@ export class TableEvaluator {
                     /^\[([A-Z]|[+-]\d+c)([+-]\d+r|\d+):([A-Z]|[+-]\d+c)([+-]\d+r|\d+)\]/
                 );
 
-                const matchformula = restformula.match(/^[a-zA-Z]{3,}\(/);
+                const matchformula = inName ? null : restformula.match(/^[a-zA-Z]{2,}[a-zA-Z0-9_]*\(/);
 
                 const matchNum = restformula.match(/^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/);
 
@@ -780,7 +1001,7 @@ export class TableEvaluator {
                     const [startRow, startCol] = startCoords;
                     const [endRow, endCol] = endCoords;
                     this.debug(`we look for range till ${this.cords2ref(endRow, endCol)}`);
-                    results += this.unfoldRange(startRow, endRow, startCol, endCol, pos, false);
+                    results += this.unfoldRange(startRow, endRow, startCol, endCol, pos, false, skipBlanks);
                 } else if (matchMatrix) {
                     this.debug(`we matched a matrix`);
                     i += matchMatrix[0].length - 1;
@@ -798,7 +1019,7 @@ export class TableEvaluator {
                     const [start, end] = matchRangeCol[0].split(":"); // Split the range into start and end
                     const [startCol, startRow] = [this.letter2col(start), this.headerRows]; // we skip the header
                     const [endCol, endRow] = [this.letter2col(end), this.maxrows - 1];
-                    results += this.unfoldRange(startRow, endRow, startCol, endCol, pos);
+                    results += this.unfoldRange(startRow, endRow, startCol, endCol, pos, false, skipBlanks);
                 } else if (matchRangeColMatrix) {
                     this.debug(`we matched a column range Matrix`);
                     i += matchRangeColMatrix[0].length - 1;
@@ -814,22 +1035,23 @@ export class TableEvaluator {
                     const endCol = this.maxcols - 1;
                     const startRow = this.rowIndex(parseInt(start));
                     const endRow = this.rowIndex(parseInt(end));
-                    results += this.unfoldRange(startRow, endRow, startCol, endCol, pos);
+                    results += this.unfoldRange(startRow, endRow, startCol, endCol, pos, false, skipBlanks);
                 } else if (matchformula) {
                     this.debug(`we matched formula ${matchformula}`);
                     const contentInsideParenthesis = this.findclosingbracket(
                         restformula.slice(matchformula[0].length)
                     );
                     this.debug(`contentInsideParenthesis ${contentInsideParenthesis}`);
+                    const fn = resolveFunction(matchformula[0].slice(0, -1));
                     const res = this.parsefunction(contentInsideParenthesis, [
                         formulaRow,
                         formulaCol //this keeps the referencing cell; for highlighting
-                    ]);
-                    results += matchformula[0] + res + ")";
+                    ], BLANK_SKIPPING.has(fn));
+                    results += fn + "(" + res + ")";
                     i += matchformula[0].length + contentInsideParenthesis.length;
                 } else if (matchCell) {
                     this.debug(`we matched a cell`);
-                    const ref = this.getValuebyReference(matchCell[0], formulaRow, formulaCol);
+                    const ref = this.getValuebyReference(matchCell[0], formulaRow, formulaCol, skipBlanks);
                     results += ref.toString();
                     i += matchCell[0].length - 1;
                 } else if (matchNum) {
@@ -850,7 +1072,7 @@ export class TableEvaluator {
     }
 
 
-    unfoldRange(startRow: number, endRow: number, startCol: number, endCol: number, formulaPos: [number, number] = [0, 0], matrix = false, nullAsZero = true): string {
+    unfoldRange(startRow: number, endRow: number, startCol: number, endCol: number, formulaPos: [number, number] = [0, 0], matrix = false, skipBlanks = false): string {
         const [formulaRow, formulaCol] = formulaPos;
         [startRow, endRow] = startRow > endRow ? [endRow, startRow] : [startRow, endRow];
         [startCol, endCol] = startCol > endCol ? [endCol, startCol] : [startCol, endCol];
@@ -869,13 +1091,14 @@ export class TableEvaluator {
                 this.children[r][c].push([formulaRow, formulaCol]);
 
                 const val = this.getValueByCoordinates(r, c);
-                colArray.push(val);
+                // blanks are null (skipped) in aggregates; matrices keep them as 0
+                colArray.push(!matrix && skipBlanks && this.isBlank(r, c) ? null : val);
             }
             rowArray.push(colArray);
         }
 
         const fmt = (v: any) => {
-            if (v === null) return nullAsZero ? "0" : "null";
+            if (v === null) return "null";
             // for string values wrapped in quotes, change this to: return typeof v === "string" ? `"${v}"` : String(v);
             return String(v);
         };

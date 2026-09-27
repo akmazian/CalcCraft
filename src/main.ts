@@ -2,7 +2,7 @@
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: Table Master compatibility (recompute after its rebuild, merged-cell
 // positions), precision setting for unit results, scientific display of results,
-// no colour or border on computed cells, no hover underline, Enter in the last row leaves the table, header-row detection, uppercase labels numbered from the first row
+// no colour or border on computed cells, no hover underline, error details on hover, Enter in the last row leaves the table, header-row detection, uppercase labels numbered from the first row
 // after the header, dead label code and debug logging removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
@@ -257,6 +257,7 @@ export default class CalcCraftPlugin extends Plugin {
 				const cellContent = gridData[rowIndex]?.[colIndex] || "";
 				const computedValue = result.values[rowIndex]?.[colIndex];
 				const error = result.errors[rowIndex]?.[colIndex];
+				const errorDetail = result.errorDetails?.[rowIndex]?.[colIndex];
 				const cellType = result.cellTypes[rowIndex]?.[colIndex];
 				const scientific = result.scientific[rowIndex]?.[colIndex] || false;
 
@@ -304,7 +305,8 @@ export default class CalcCraftPlugin extends Plugin {
 				// Apply styling and content based on cell type
 				if (cellType === 2) { // formula
 					cellEl.classList.add("formula-cell");
-					cellEl.setAttribute("title", cellContent);
+					// Hover shows the formula, and for an error its full reason
+					cellEl.setAttribute("title", error && errorDetail ? `${cellContent}\n${error} ${errorDetail}` : cellContent);
 
 					if (error) {
 						cellEl.classList.add("error-cell");
@@ -403,6 +405,10 @@ export default class CalcCraftPlugin extends Plugin {
 			// Applies global precision + separators to the number part
 			const parts = splitUnit(data);
 			data = parts ? `${this.formatNumber(parts[0], scientific)} ${parts[1]}` : data.toString();
+		}
+		// TRUE/FALSE, as Excel shows them
+		else if (typeof data === "boolean") {
+			data = data ? "TRUE" : "FALSE";
 		}
 		// Handle numbers (NOT pre-formatted)
 		else if (typeof data === "number") {

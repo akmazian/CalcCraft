@@ -278,12 +278,15 @@ describe("regression: behaviour that must not change", () => {
 	});
 
 	test("circular reference is reported as a loop", () => {
-		const { errors } = run([["a", "b"], ["=B1", "=A1"]]);
-		assert.match(String(errors[1][0]), /loop\n[AB]1/);
+		const { errors, result } = run([["a", "b"], ["=B1", "=A1"]]);
+		assert.equal(errors[1][0], "#CIRCULAR!");
+		assert.match(String(result.errorDetails[1][0]), /circular reference through [AB]1/);
 	});
 
 	test("reference outside the table is an error", () => {
-		assert.match(String(at([["a"], ["=Z9"]], 1, 0).error), /out of/);
+		const { errors, result } = run([["a"], ["=Z9"]]);
+		assert.equal(errors[1][0], "#REF!");
+		assert.equal(result.errorDetails[1][0], "Z9 is outside the table");
 	});
 
 	test("format() and scientific()", () => {
@@ -357,13 +360,14 @@ describe("references: uppercase columns, rows numbered after the header", () => 
 
 	test("A0 (the header) is out of the table", () => {
 		const { errors } = run([["h"], ["=A0"]]);
-		assert.match(String(errors[1][0]), /out of/);
+		assert.equal(errors[1][0], "#REF!");
 	});
 
 	test("lowercase a1 is not a reference", () => {
-		const { values, errors } = run([["h"], ["7"], ["=a1"]]);
+		const { values, errors, result } = run([["h"], ["7"], ["=a1"]]);
 		assert.equal(values[2][0], null);
-		assert.match(String(errors[2][0]), /a1/);
+		assert.equal(errors[2][0], "#NAME?");
+		assert.match(String(result.errorDetails[2][0]), /a1/);
 	});
 
 	test("function names with digits are not references: log2, log10", () => {
@@ -618,10 +622,151 @@ describe("TODO 5-9: no more silently wrong numbers", () => {
 	test("8. a sign right after a value is ambiguous: =A1-1c+0r is an error, not 102", () => {
 		const grid = (f: string) => [["A", "B", "C"], ["10", "2", f]];
 		const bad = run(grid("=B1-1c+0r"));
-		assert.match(String(bad.errors[1][2]), /ambiguous "-1c\+0r"/);
+		assert.equal(bad.errors[1][2], "#ERROR!");
+		assert.match(String(bad.result.errorDetails[1][2]), /ambiguous "-1c\+0r"/);
 		assert.equal(run(grid("=A1 - (-1c+0r)")).values[1][2], 8);
 		assert.equal(run(grid("=A1 - -1c+0r")).values[1][2], 8);
 		assert.equal(run(grid("=-2c+0r * -1c+0r")).values[1][2], 20);
 		assert.equal(run(grid("=sum(-2c1:-1c1)")).values[1][2], 12); // after "(" is fine
+	});
+});
+
+describe("TODO 10: Excel function names", () => {
+	const one = (formula: string, grid: string[][] = [["a", "b", "c"], ["", "", ""]]) => {
+		const g = grid.map(r => [...r]);
+		g[g.length - 1][g[0].length - 1] = formula;
+		const res = run(g);
+		const r = g.length - 1, c = g[0].length - 1;
+		return { value: res.values[r][c], error: res.errors[r][c], detail: res.result.errorDetails[r][c] };
+	};
+	const val = (formula: string, grid?: string[][]) => one(formula, grid).value;
+	const nums = [["a", "b", "x"], ["2", "-2", ""], ["", "", ""], ["4", "-4", ""]];
+
+	test("any capitalisation: SUM, Sum, sum", () => {
+		for (const f of ["=SUM(A1:A3)", "=Sum(A1:A3)", "=sum(A1:A3)"]) assert.equal(val(f, nums), 6, f);
+	});
+
+	test("math.js functions in any case: TRANSPOSE, DotMultiply", () => {
+		assert.equal(val("=DotMultiply(2, 3)"), 6);
+		const t = one("=TRANSPOSE([7,8])"); // spills; the formula cell holds the first value
+		assert.equal(t.error, null);
+		assert.equal(t.value, 7);
+	});
+
+	test("blank cells are skipped: AVERAGE, MIN, MAX, PRODUCT, COUNT, and math.js mean", () => {
+		assert.equal(val("=AVERAGE(A1:A3)", nums), 3);
+		assert.equal(val("=mean(A1:A3)", nums), 3);
+		assert.equal(val("=MAX(B1:B3)", nums), -2);
+		assert.equal(val("=MIN(A1:A3)", nums), 2);
+		assert.equal(val("=PRODUCT(A1:A3)", nums), 8);
+		assert.equal(val("=COUNT(A1:B3)", nums), 4);
+		assert.equal(val("=AVERAGE(A1, A2, A3)", nums), 3); // single blank references too
+	});
+
+	test("blank cells still count as 0 in arithmetic and matrices", () => {
+		assert.equal(val("=A2 + 1", nums), 1);
+		assert.equal(String(val("=[A1:A3]*1", [["a", "x"], ["2", ""], ["", ""], ["4", ""]])), "2");
+	});
+
+	test("COUNT counts numbers (with units), COUNTA anything non-blank", () => {
+		const g = [["a", "x"], ["2", ""], ["pFN214", ""], ["5 mL", ""], ["", ""]];
+		assert.equal(val("=COUNT(A1:A4)", g), 2);
+		assert.equal(val("=COUNTA(A1:A4)", g), 3);
+	});
+
+	test("IF, AND, OR, NOT, TRUE, FALSE and Excel comparisons (=, <>)", () => {
+		const g = [["a", "x"], ["0", ""]];
+		assert.equal(val('=IF(A1=0, "zero", "not zero")', g), "zero");
+		assert.equal(val('=IF(A1<>0, "not zero", "zero")', g), "zero");
+		assert.equal(val("=IF(A1>1, 2)", g), false);
+		assert.equal(val("=AND(1, TRUE, 2>1)"), true);
+		assert.equal(val("=OR(FALSE, 0)"), false);
+		assert.equal(val("=NOT(A1)", g), true);
+		assert.equal(val("=TRUE()"), true);
+		assert.equal(val('=IF(A1 == 0, "eq")', g), "eq"); // math.js == still works
+	});
+
+	test("Excel meanings win whatever the case: LOG is base 10, FLOOR/CEILING use a multiple", () => {
+		assert.equal(val("=LOG(100)"), 2);
+		assert.equal(val("=log(100)"), 2);
+		assert.equal(val("=LOG(8, 2)"), 3);
+		assert.ok(Math.abs(val("=LN(EXP(1))") - 1) < 1e-12);
+		assert.equal(val("=FLOOR(7, 5)"), 5);
+		assert.equal(val("=floor(7, 5)"), 5);
+		assert.equal(val("=FLOOR(0.3, 0.1)"), 0.3);
+		assert.equal(val("=CEILING(4.2, 0.5)"), 4.5);
+		assert.equal(val("=FLOOR(-2.5)"), -3);
+	});
+
+	test("rounding: ROUND (halves away from zero, negative digits), ROUNDUP, ROUNDDOWN, TRUNC, INT", () => {
+		assert.equal(val("=ROUND(-2.5)"), -3);
+		assert.equal(val("=ROUND(1.005, 2)"), 1.01);
+		assert.equal(val("=ROUND(1234.5678, -2)"), 1200);
+		assert.equal(val("=ROUNDUP(1.21, 1)"), 1.3);
+		assert.equal(val("=ROUNDDOWN(-1.29, 1)"), -1.2);
+		assert.equal(val("=TRUNC(-2.7)"), -2);
+		assert.equal(val("=INT(-2.5)"), -3);
+	});
+
+	test("ROUND keeps units: ROUND(1.2345 mL, 2) -> 1.23 mL", () => {
+		assertUnit(val('=ROUND("1.2345 mL", 2)'), 1.23, "mL");
+	});
+
+	test("MOD, POWER, SQRT, ABS, PI", () => {
+		assert.equal(val("=MOD(-3, 2)"), 1);
+		assert.equal(val("=POWER(2, 10)"), 1024);
+		assert.equal(val("=SQRT(16)"), 4);
+		assert.equal(val("=ABS(-3)"), 3);
+		assert.equal(val("=PI()"), Math.PI);
+	});
+});
+
+describe("TODO 12: Excel error codes", () => {
+	const cell = (grid: string[][], r: number, c: number) => {
+		const res = run(grid);
+		return { error: res.errors[r][c], detail: res.result.errorDetails[r][c] };
+	};
+
+	test("=1/0 is #DIV/0!, not Infinity; unit division too", () => {
+		assert.equal(cell([["a"], ["=1/0"]], 1, 0).error, "#DIV/0!");
+		assert.equal(cell([["a"], ['="1 cm"/0']], 1, 0).error, "#DIV/0!");
+		assert.equal(cell([["a"], ["=MOD(1, 0)"]], 1, 0).error, "#DIV/0!");
+		assert.equal(cell([["a", "x"], ["", "=AVERAGE(A1:A1)"]], 1, 1).error, "#DIV/0!");
+	});
+
+	test("#NAME? for unknown functions and names", () => {
+		const e = cell([["a"], ["=COUNTIFS(1)"]], 1, 0);
+		assert.equal(e.error, "#NAME?");
+		assert.match(String(e.detail), /COUNTIFS/);
+	});
+
+	test("#VALUE! for wrong types; #NUM! for impossible maths; #ERROR! for syntax", () => {
+		assert.equal(cell([["a", "b"], ["pFN214", "=A1*2"]], 1, 1).error, "#VALUE!");
+		assert.equal(cell([["a"], ['="1 cm" + "1 s"']], 1, 0).error, "#VALUE!");
+		assert.equal(cell([["a"], ["=SQRT(-1)"]], 1, 0).error, "#NUM!");
+		assert.equal(cell([["a"], ["=LOG(0)"]], 1, 0).error, "#NUM!");
+		assert.equal(cell([["a"], ["=1+"]], 1, 0).error, "#ERROR!");
+	});
+
+	test("#SPILL! names the cell in the way", () => {
+		const e = cell([["a"], ["=[1;2]"], ["x"]], 1, 0);
+		assert.equal(e.error, "#SPILL!");
+		assert.equal(e.detail, "the result would overwrite A2");
+	});
+
+	test("errors propagate to formulas that use the cell (was 0)", () => {
+		const res = run([["a", "b", "c", "d"], ["pFN214", "=A1*2", "=B1*2", "=C1+1"]]);
+		assert.deepEqual(res.errors[1].slice(1), ["#VALUE!", "#VALUE!", "#VALUE!"]);
+		assert.match(String(res.result.errorDetails[1][2]), /^B1: /);
+		assert.match(String(res.result.errorDetails[1][3]), /^C1: B1: /);
+	});
+
+	test("a reference outside the table propagates as #REF!, not a loop", () => {
+		const res = run([["a", "b", "c"], ["1", "=Z9", "=B1+1"]]);
+		assert.deepEqual([res.errors[1][1], res.errors[1][2]], ["#REF!", "#REF!"]);
+	});
+
+	test("errors inside a sum propagate too", () => {
+		assert.equal(cell([["a", "b"], ["=1/0", "=SUM(A1:A2)"], ["2", ""]], 1, 1).error, "#DIV/0!");
 	});
 });

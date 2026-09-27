@@ -11,7 +11,17 @@ Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github
 
 ## [Unreleased]
 
+### Changed
+- **Excel function names, in any case**: `SUM`, `Sum` and `sum` are the same. Excel functions: `SUM`, `AVERAGE`, `MIN`, `MAX`, `MEDIAN`, `PRODUCT`, `COUNT`, `COUNTA`, `STDEV`, `STDEVP`, `VAR`, `VARP`, `IF`, `AND`, `OR`, `NOT`, `TRUE`, `FALSE`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `TRUNC`, `INT`, `FLOOR`, `CEILING`, `MOD`, `ABS`, `SIGN`, `SQRT`, `POWER`, `EXP`, `LN`, `LOG`, `LOG10`, `PI`. Other math.js functions keep working in any case (`TRANSPOSE`, `DotMultiply`)
+- **Breaking: Excel's meaning wins whatever the case.** `log(100)` is now `2` (base 10, like Excel's `LOG`; it was the natural log, now `LN`), and `floor(7, 5)` is `5` (rounds down to a multiple, like Excel's `FLOOR`; math.js's second argument was a number of decimals). Check formulas that use `log`, `floor` or `count`
+- **Excel comparisons**: `=IF(A1=0, …)` and `A1<>0` work (`=` compares, `<>` is "not equal"); `TRUE`/`FALSE` results are shown in capitals
+- **Excel error codes**: errors show as `#DIV/0!`, `#REF!`, `#NAME?`, `#VALUE!`, `#NUM!`, `#SPILL!`, `#CIRCULAR!` (loops) or `#ERROR!` (formula syntax). Hovering the cell shows the formula and the full reason
+
 ### Fixed
+- **Errors propagate**: a formula using a cell with an error gets the same error (the hover text says where it came from). It used to treat the cell as `0`, and a reference outside the table was reported as a loop
+- **`=1/0` is `#DIV/0!`**, not `Infinity`
+- **Blank cells are skipped by aggregate functions**, as in Excel: `AVERAGE`/`mean` of 2, blank, 4 is `3` (was `2`), `MAX` of -2, blank, -4 is `-2` (was `0`), `PRODUCT` is `8` (was `0`). In arithmetic and matrices a blank still counts as `0`
+- `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `TRUNC`, `INT`, `FLOOR` and `CEILING` work on quantities with units (`ROUND(1.2345 mL, 2)` → `1.23 mL`)
 - **Percentages**: `50%` is read as `0.5` (it was read as `50`)
 - **No more partial numbers**: a cell is only a number if all of it is one. Dates (`2026-09-25`) and ratios (`2.5:1`, `1:1`) were read as their first number (`2026`, `2.5`); they are now text, so arithmetic on them shows an error
 - **`#SPILL!`**: an array result no longer overwrites cells that contain something else; it shows `#SPILL!` instead. Copies of the same array formula can still be overwritten, so repeating one down a column keeps working
