@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github.com/klaudyu/CalcCraft) 2.3.7 by akmazian, installed under the plugin ID `calc-craft-fork`. Everything below 2.3.7 is upstream history.
 
-## [Unreleased]
+## [2.3.7-fork.3] - 2026-09-26
 
 ### Added
 - **References follow inserted, deleted and moved rows and columns**, like Excel. Inserting a row above `s2` turns `=C2*D2` into `=C3*D3` and `=sum(C1:C3)` into `=sum(C1:C4)`; moving a row takes its references with it while totals keep covering the same rows; deleting a referenced row or column writes `#REF!` into the formula (`=C1*#REF!`). Works for Obsidian's table commands, the right-click menu, drag handles and rows pasted in source mode, and one undo reverts the edit and the rewrite together. Relative references (`+0c-1r`) stay positional, formulas in newly inserted rows are left as written, and a sort (many rows rearranged at once) leaves references on their positions
