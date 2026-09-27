@@ -12,6 +12,7 @@ Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github
 ## [Unreleased]
 
 ### Changed
+- **Cells no longer widen while you type** (Live Preview): the cell keeps the size of what it showed, and the text you're typing runs over the neighbouring cells, like in Excel. The column resizes once, to the new result, when you finish
 - **Excel function names, in any case**: `SUM`, `Sum` and `sum` are the same. Excel functions: `SUM`, `AVERAGE`, `MIN`, `MAX`, `MEDIAN`, `PRODUCT`, `COUNT`, `COUNTA`, `STDEV`, `STDEVP`, `VAR`, `VARP`, `IF`, `AND`, `OR`, `NOT`, `TRUE`, `FALSE`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `TRUNC`, `INT`, `FLOOR`, `CEILING`, `MOD`, `ABS`, `SIGN`, `SQRT`, `POWER`, `EXP`, `LN`, `LOG`, `LOG10`, `PI`. Other math.js functions keep working in any case (`TRANSPOSE`, `DotMultiply`)
 - **Breaking: Excel's meaning wins whatever the case.** `log(100)` is now `2` (base 10, like Excel's `LOG`; it was the natural log, now `LN`), and `floor(7, 5)` is `5` (rounds down to a multiple, like Excel's `FLOOR`; math.js's second argument was a number of decimals). Check formulas that use `log`, `floor` or `count`
 - **Excel comparisons**: `=IF(A1=0, …)` and `A1<>0` work (`=` compares, `<>` is "not equal"); `TRUE`/`FALSE` results are shown in capitals

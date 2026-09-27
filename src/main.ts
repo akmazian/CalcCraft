@@ -1,9 +1,12 @@
 // Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
-// (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
-// Changes: Table Master compatibility (recompute after its rebuild, merged-cell
-// positions), precision setting for unit results, scientific display of results,
-// formulas read from the markdown source, no colour or border on computed cells, no hover underline,  error details on hover, Enter in the last row leaves the table, header-row detection, uppercase labels numbered from the first row
-// after the header, dead label code and debug logging removed.
+// (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0. Changes:
+// - formulas read from the markdown source; header-row detection; uppercase labels
+//   numbered from the first row after the header
+// - Table Master compatibility (recompute after its rebuild, merged-cell positions)
+// - precision setting for unit results; scientific display of results; error details on hover
+// - no colour, border or hover underline on computed cells; cells keep their width while
+//   edited; Enter in the last row leaves the table
+// - dead label code and debug logging removed
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { Plugin, MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
@@ -12,6 +15,9 @@ import { TableEvaluator, formatExponential, formatFixed, splitUnit } from "./tab
 import { tableAtLine, tablesInLines } from "./table-source";
 
 const debug = false;
+
+// A CSS string literal, for use in content: var(--calc-size)
+const cssString = (text: string) => `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\A ")}"`;
 
 export default class CalcCraftPlugin extends Plugin {
 	settings: any = {};
@@ -366,6 +372,16 @@ export default class CalcCraftPlugin extends Plugin {
 						// Reading view
 						cellEl.textContent = String(computedValue);
 					}
+				}
+
+				// Live Preview: remember what the cell shows, so it keeps this size while being
+				// edited (see styles.css) instead of widening as the formula is typed. Obsidian
+				// edits in a new wrapper element, so this goes on the cell as a CSS variable.
+				const sizeWrapper = cellEl.querySelector<HTMLElement>(".table-cell-wrapper");
+				if (sizeWrapper && !cellEl.matches(":focus-within")) {
+					const shown = sizeWrapper.dataset.calcDisplay ?? sizeWrapper.textContent ?? "";
+					cellEl.dataset.calcSized = "true";
+					cellEl.style.setProperty("--calc-size", cssString(shown));
 				}
 			}
 		}

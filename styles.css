@@ -2,7 +2,8 @@
    (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
    Changes: removed CSS rules for the old label rows and invalid '#' declarations;
    no hover underline; no colour or border on computed cells;
-   computed values aligned like normal cell text in Live Preview. */
+   computed values aligned like normal cell text in Live Preview; cells keep their size
+   while edited. */
 
 /**************** error cells**************/
 .markdown-rendered .error-cell-colorenabled{
@@ -36,6 +37,38 @@
 .theme-dark  .markdown-rendered .cell-children-highlight {
     background-color: var(--CalcCraft_formula_background_children_dark)!important;
     color:var(--CalcCraft_formula_font_children_dark)!important;
+}
+
+/* Live Preview, while a cell is edited: it keeps the size of what it showed (an invisible
+   copy of that text holds the space) and the editor floats on top, starting where the text
+   was and running over the neighbouring cells when the formula is longer. So the column
+   doesn't widen while typing and shrink back afterwards. */
+.cm-table-widget td[data-calc-sized] > .table-cell-wrapper:focus-within {
+    position: relative;
+}
+
+.cm-table-widget td[data-calc-sized] > .table-cell-wrapper:focus-within > div {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    box-sizing: border-box;
+    min-width: 100%;
+    width: max-content;
+    min-height: 100%;
+    padding: var(--size-2-2) var(--size-4-2);
+    background-color: var(--background-primary);
+    box-shadow: 0 0 0 1px var(--table-border-color);
+}
+
+.cm-table-widget td[data-calc-sized] > .table-cell-wrapper:focus-within::after {
+    content: var(--calc-size);
+    display: inline-block;
+    vertical-align: top;
+    visibility: hidden;
+    white-space: pre;
+    font-size: var(--table-text-size);
+    line-height: var(--table-line-height);
 }
 
 /* Live Preview: hide the formula text and show the computed value in its place. The
