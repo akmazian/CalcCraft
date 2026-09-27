@@ -2,13 +2,14 @@
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: Table Master compatibility (recompute after its rebuild, merged-cell
 // positions), precision setting for unit results, scientific display of results,
-// no colour or border on computed cells, no hover underline, error details on hover, Enter in the last row leaves the table, header-row detection, uppercase labels numbered from the first row
+// formulas read from the markdown source, no colour or border on computed cells, no hover underline,  error details on hover, Enter in the last row leaves the table, header-row detection, uppercase labels numbered from the first row
 // after the header, dead label code and debug logging removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
 
 import { Plugin, MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
 import { CalcCraftSettingsTab, DefaultSettings } from "./settings";
 import { TableEvaluator, formatExponential, formatFixed, splitUnit } from "./table-evaluator";
+import { tableAtLine, tablesInLines } from "./table-source";
 
 const debug = false;
 
@@ -170,6 +171,17 @@ export default class CalcCraftPlugin extends Plugin {
 		const tables = el.querySelectorAll("table");
 		if (tables.length === 0) return;
 
+		// The markdown source of the tables, to read formulas from (see table-source.ts).
+		// Reading view: the section Obsidian rendered. Live Preview: the editor's lines.
+		const section = ctx?.getSectionInfo?.(el);
+		const sectionTables = section
+			? tablesInLines(section.text.split("\n").slice(section.lineStart, section.lineEnd + 1))
+			: [];
+		tables.forEach((tableEl, index) => {
+			const source = this.liveTableSource(tableEl) ?? sectionTables[index];
+			if (source) (tableEl as any).calcCraftSource = source;
+		});
+
 		// Ignore our own DOM writes in the Live Preview MutationObserver
 		this.safelyMutateDOM(() => {
 			tables.forEach(tableEl => {
@@ -177,6 +189,20 @@ export default class CalcCraftPlugin extends Plugin {
 				this.watchTableMaster(tableEl);
 			});
 		});
+	}
+
+	// Markdown rows of a Live Preview table, from the active editor
+	private liveTableSource(tableEl: HTMLTableElement): string[][] | null {
+		const widget = tableEl.closest(".cm-table-widget");
+		const editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+		const cm = (editor as any)?.cm;
+		if (!widget || !editor || !cm?.dom?.contains(widget)) return null;
+		try {
+			const line = editor.offsetToPos(cm.posAtDOM(widget)).line;
+			return tableAtLine(editor.getValue().split("\n"), line);
+		} catch {
+			return null;
+		}
 	}
 
 	private processTable(tableEl: HTMLTableElement) {
@@ -191,7 +217,7 @@ export default class CalcCraftPlugin extends Plugin {
 				this.addSimpleLabels(cells, headerRows);
 			}
 
-			const gridData = this.extractTableGrid(cells);
+			const gridData = this.extractTableGrid(cells, (tableEl as any).calcCraftSource);
 			const evaluator = new TableEvaluator();
 			const result = evaluator.evaluateTable(gridData, { ...this.settings, headerRows });
 
@@ -235,10 +261,15 @@ export default class CalcCraftPlugin extends Plugin {
 		);
 	}
 
-	private extractTableGrid(cells: (HTMLElement | undefined)[][]): string[][] {
-		return cells.map(row =>
-			row.map(cellEl => {
+	// Cell text as rendered, except formulas, which come from the markdown source when it
+	// lines up with the table (rendering drops the * in =A1*B1+A1*B1)
+	private extractTableGrid(cells: (HTMLElement | undefined)[][], source?: string[][]): string[][] {
+		const useSource = source && source.length === cells.length;
+		return cells.map((row, r) =>
+			row.map((cellEl, c) => {
 				if (!cellEl) return "";
+				const raw = useSource ? source[r]?.[c] : undefined;
+				if (raw !== undefined && (raw.startsWith("=") || raw.startsWith("'="))) return raw;
 				const wrapper = cellEl.querySelector('.table-cell-wrapper');
 				const cellContent = wrapper ? wrapper.textContent : cellEl.textContent;
 				return (cellContent || "").trim();

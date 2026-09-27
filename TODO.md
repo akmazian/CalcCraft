@@ -16,6 +16,7 @@ Behaviour described as of `2.3.7-fork.2`. Difficulty is a rough guess.
 - [x] 7. **Array results overwrite typed cells without warning.** `=[1;2;3]` writes over the cells below even if they contain values. Excel shows `#SPILL!`. *Easy.*
 - [x] 8. **A sign after a reference glues into a relative reference**: `=A1-1c+0r` gives `102` (10 followed by 2) instead of 8. *Easy.*
 - [x] 9. **Ratios like `2.5:1` are read as `2.5`** (and `1:1` as `1`). *Easy.*
+- [x] 9b. *(found while testing)* **Formulas with two `*` were misread**: they were read from the rendered cell, where Obsidian turns `*...*` into italics, so `=A1*B1+A1*B1` became `=A1B1+A1B1` (46 instead of 12). Now read from the markdown source.
 
 ## Excel formula compatibility
 
