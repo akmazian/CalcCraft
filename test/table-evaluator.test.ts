@@ -802,3 +802,75 @@ describe("IF evaluates only the branch it takes", () => {
 		assert.equal(at([["a"], ["=IF(1)"]], 1, 0), "#VALUE!");
 	});
 });
+
+describe("& joins text, like Excel", () => {
+	const v = (formula: string, cells: string[] = ["pFN214", "Branaplam", "3"]) => {
+		const res = run([["a", "b", "c", "d"], [...cells, formula]]);
+		return res.errors[1][3] ?? res.values[1][3];
+	};
+
+	test('=A1 & "_" & B1 & "_48hr_rep" & C1', () => {
+		assert.equal(v('=A1 & "_" & B1 & "_48hr_rep" & C1'), "pFN214_Branaplam_48hr_rep3");
+	});
+
+	test('quoted text next to & stays text ("48hr" is not 48 hours)', () => {
+		assert.equal(v('=A1 & "48hr"'), "pFN21448hr");
+		assert.equal(v('="5 mL" & ""'), "5 mL");
+		assertUnit(v('="5 mL" * 3'), 15, "mL"); // a quoted quantity in arithmetic is still one
+	});
+
+	test("numbers, units, TRUE/FALSE and blanks as Excel writes them", () => {
+		assert.equal(v('="x" & 0.1+0.2'), "x0.3");
+		assert.equal(v('=C1 & ""', ["", "", "1.8e5"]), "180000");
+		assert.equal(v('=A1 & "|" & B1', ["", "5 mL", ""]), "|5 mL");
+		assert.equal(v('=(1>0) & ""'), "TRUE");
+	});
+
+	test("arithmetic binds tighter than &, & tighter than comparisons", () => {
+		assert.equal(v('="n=" & C1+1'), "n=4");
+		assert.equal(v('=IF(A1 & "x" = "pFN214x", "yes", "no")'), "yes");
+		assert.equal(v('=A1 & "_" & ROUND(1/3, 2)'), "pFN214_0.33");
+	});
+
+	test("CONCAT and CONCATENATE (blanks skipped)", () => {
+		assert.equal(v("=CONCAT(A1:C1)"), "pFN214Branaplam3");
+		assert.equal(v('=CONCATENATE(A1, "-", C1)'), "pFN214-3");
+		assert.equal(v("=CONCAT(A1:C1)", ["a", "", "c"]), "ac");
+	});
+
+	test("a cell with an error still propagates", () => {
+		assert.equal(run([["a", "b"], ["=1/0", '=A1 & "x"']]).errors[1][1], "#DIV/0!");
+	});
+});
+
+describe("comparisons follow Excel", () => {
+	const v = (formula: string, a = "pFN214", b = "") => {
+		const res = run([["a", "b", "c"], [a, b, formula]]);
+		return res.errors[1][2] ?? res.values[1][2];
+	};
+
+	test("text is compared as text, ignoring case", () => {
+		assert.equal(v('=IF(A1="pFN214", "yes", "no")'), "yes");
+		assert.equal(v('=A1="PFN214"'), true);
+		assert.equal(v('=A1<>"pFN223"'), true);
+		assert.equal(v('="apple"<"banana"'), true);
+	});
+
+	test("text is larger than any number; numbers still compare as numbers", () => {
+		assert.equal(v('=A1>5'), true);
+		assert.equal(v('=A1=5'), false);
+		assert.equal(v("=A1>2", "3"), true);
+		assert.equal(v('=A1="3"', "3"), false); // the number 3 isn't the text "3", as in Excel
+	});
+
+	test('a blank cell equals both "" and 0', () => {
+		assert.equal(v('=B1=""'), true);
+		assert.equal(v("=B1=0"), true);
+		assert.equal(v('=IF(B1="", "empty", "full")'), "empty");
+	});
+
+	test("quantities compare with units", () => {
+		assert.equal(v('=A1>"4 mL"', "5 mL"), true);
+		assert.equal(v('=A1="5000 uL"', "5 mL"), true);
+	});
+});

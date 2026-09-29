@@ -21,7 +21,7 @@ Behaviour described as of `2.3.7-fork.2`. Difficulty is a rough guess.
 ## Excel formula compatibility
 
 - [x] 10. **Function names are lowercase math.js names.** `SUM`, `IF`, `AVERAGE` are "undefined function"; `sum` and `mean` work, and conditions need `A1>1 ? 2 : 3`. Accept any case and map Excel names to math.js. *Easy.*
-- [ ] 11. **Missing Excel functions.** ~~`COUNT` over a range errors~~, ~~`ROUND` on units~~ (done with 10); still no `COUNTIF`/`SUMIF`, `VLOOKUP`/`XLOOKUP`, text functions, dates. *Medium, one at a time.*
+- [ ] 11. **Missing Excel functions.** ~~`COUNT` over a range errors~~, ~~`ROUND` on units~~ (done with 10); `&`, `CONCAT` and text comparisons done; still no `COUNTIF`/`SUMIF`, `VLOOKUP`/`XLOOKUP`, other text functions (`LEFT`, `TEXT`, ...), dates. *Medium, one at a time.*
 - [x] 12. **Errors aren't Excel-style.** `=1/0` shows `Infinity` instead of `#DIV/0!`; messages like "cell out of table" or "Undefined symbol" instead of `#REF!` / `#NAME?`. *Easy.*
 - [ ] 13. **No `$A$1` absolute references, and no fill down / fill right.** Copying a formula doesn't shift its references. *Medium.*
 - [ ] 14. **Only columns A–Z.** `AA1` is an error. *Easy-medium.*

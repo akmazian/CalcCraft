@@ -2,7 +2,7 @@
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: scientific notation in cells and formulas, whitespace digit grouping,
 // grouping-separator fix, uppercase references, rows numbered after the header,
-// quoted quantities (="5 mL" * 3), format()/scientific() for units, scientific results
+// quoted quantities (="5 mL" * 3), & joins text, format()/scientific() for units, scientific results
 // that follow their inputs, strict number parsing, percentages, #SPILL!, Excel
 // functions and error codes, molar unit M, µ/μ micro prefix, dead code removed.
 // See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
@@ -162,7 +162,36 @@ function lazyIf() {
     return IF;
 }
 
+// A value as Excel writes it in text: numbers to 15 significant digits (0.1+0.2 -> 0.3),
+// TRUE/FALSE, quantities with their unit, blank as nothing
+function excelText(value: any): string {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+    if (typeof value === "number") return shortExponent(String(parseFloat(value.toPrecision(15))));
+    if (math.isUnit(value)) {
+        const parts = splitUnit(value);
+        return parts ? `${excelText(parts[0])} ${parts[1]}` : value.toString();
+    }
+    if (math.isMatrix(value) || Array.isArray(value)) throw excelError("#VALUE!", "a range can't be joined with &; use CONCAT");
+    return String(value);
+}
+
+// Excel's comparisons: text with text ignoring case, text counts as larger than any number,
+// and a blank cell (null here) equals both "" and 0. Numbers and quantities as in math.js.
+function excelCompare(fn: string, a: any, b: any): boolean {
+    if (a === null) a = typeof b === "string" ? "" : 0;
+    if (b === null) b = typeof a === "string" ? "" : 0;
+    const text = (x: any) => typeof x === "string";
+    if (!text(a) && !text(b)) return (math as any)[fn](a, b);
+    const order = text(a) && text(b)
+        ? a.toLowerCase().localeCompare(b.toLowerCase())
+        : text(a) ? 1 : -1;
+    return ({ equal: order === 0, unequal: order !== 0, smaller: order < 0, larger: order > 0, smallerEq: order <= 0, largerEq: order >= 0 } as Record<string, boolean>)[fn];
+}
+
 const EXCEL_FUNCTIONS: Record<string, (...args: any[]) => any> = {
+    CONCAT: (...args: any[]) => flatValues(args).map(excelText).join(""),
+    CONCATENATE: (...args: any[]) => flatValues(args).map(excelText).join(""),
     SUM: (...args: any[]) => (math as any).sum(...args),
     AVERAGE: (...args: any[]) => {
         const v = numbers(args);
@@ -259,6 +288,12 @@ const MATHJS_AGGREGATES: Record<string, (...args: any[]) => any> = {
 math.import({
     // a referenced cell's error, raised only if this part of the formula is evaluated
     cc_error: (code: string, reason: string) => { throw excelError(code, reason); },
+    // Excel's & (see rewriteFormula)
+    cc_concat: (a: any, b: any) => excelText(a) + excelText(b),
+    // Excel's comparisons (see rewriteFormula)
+    cc_compare: (fn: string, a: any, b: any) => excelCompare(fn, a, b),
+    // a blank cell: 0 in arithmetic, nothing when joined as text
+    cc_blank: 0,
     ...Object.fromEntries(Object.entries(EXCEL_FUNCTIONS).map(([name, f]) => [`excel_${name}`, f])),
     ...Object.fromEntries(Object.entries(MATHJS_AGGREGATES).map(([name, f]) => [`cc_${name}`, f])),
     TRUE: true,
@@ -268,7 +303,7 @@ math.import({
 // Functions whose ranges skip blank cells instead of reading them as 0
 const BLANK_SKIPPING = new Set([
     "sum",
-    ...["SUM", "AVERAGE", "MIN", "MAX", "MEDIAN", "PRODUCT", "COUNT", "COUNTA", "STDEV", "STDEVP", "VAR", "VARP", "AND", "OR"].map(n => `excel_${n}`),
+    ...["SUM", "AVERAGE", "MIN", "MAX", "MEDIAN", "PRODUCT", "COUNT", "COUNTA", "STDEV", "STDEVP", "VAR", "VARP", "AND", "OR", "CONCAT", "CONCATENATE"].map(n => `excel_${n}`),
     ...Object.keys(MATHJS_AGGREGATES).map(n => `cc_${n}`),
 ]);
 
@@ -288,6 +323,10 @@ export function resolveFunction(name: string): string {
     if (MATHJS_AGGREGATES[lower]) return `cc_${lower}`;
     return MATHJS_FUNCTIONS.get(lower) ?? name;
 }
+
+const RELATIONAL = new Set(["equal", "unequal", "smaller", "larger", "smallerEq", "largerEq"]);
+// functions whose quoted arguments stay text (they aren't turned into quantities)
+const TEXT_ARGUMENTS = new Set(["cc_concat", "cc_error", "excel_CONCAT", "excel_CONCATENATE"]);
 
 // Excel-style comparisons: A1=0 and A1<>0 become math.js's == and != (outside quoted text)
 function excelComparisons(formula: string): string {
@@ -715,7 +754,7 @@ export class TableEvaluator {
 
             let processedformula;
             try {
-                processedformula = this.unquoteUnits(this.parsefunction(excelComparisons(formula), [row, col]));
+                processedformula = this.parsefunction(excelComparisons(formula), [row, col]);
             } catch (error) {
                 if (error instanceof InfiniteLoop) {
                     this.setError(row, col, `circular reference through ${error.message}`);
@@ -727,7 +766,7 @@ export class TableEvaluator {
 
             try {
                 this.debug(`we will evaluate the formula: ${processedformula}`);
-                const result = math.evaluate(processedformula);
+                const result = this.rewriteFormula(math.parse(processedformula)).compile().evaluate();
 
                 this.debug(
                     `we were asked to fill in at ${this.cords2ref(
@@ -945,7 +984,8 @@ export class TableEvaluator {
         //this.debug(`{cords2ref[row,col]} is a parent of {cords2ref(formulaRow,formulaCol)}`);
         this.children[row][col].push([formulaRow, formulaCol]);
         const value = this.valueOrError(row, col);
-        return skipBlanks && this.isBlank(row, col) ? "null" : value;
+        if (this.isBlank(row, col)) return skipBlanks ? "null" : "cc_blank";
+        return value;
     }
 
     findclosingbracket(formula: string): string {
@@ -1121,8 +1161,8 @@ export class TableEvaluator {
                 this.children[r][c].push([formulaRow, formulaCol]);
 
                 const val = this.valueOrError(r, c);
-                // blanks are null (skipped) in aggregates; matrices keep them as 0
-                colArray.push(!matrix && skipBlanks && this.isBlank(r, c) ? null : val);
+                // blanks are null (skipped) in aggregates, otherwise cc_blank (0, or nothing as text)
+                colArray.push(this.isBlank(r, c) ? (!matrix && skipBlanks ? null : "cc_blank") : val);
             }
             rowArray.push(colArray);
         }
@@ -1147,19 +1187,48 @@ export class TableEvaluator {
     }
 
 
-    // ="5 mL" * 3 -> (5 mL) * 3: a quoted quantity with a valid unit behaves like a unit cell
-    private unquoteUnits(formula: string): string {
-        return formula.replace(/"([^"]*)"/g, (match, content: string) => {
-            const parsed = this.parseUnitValue(content);
-            if (!parsed.unit) return match;
-            const quantity = `${parsed.value} ${parsed.unit}`;
-            try {
-                math.unit(quantity);
-                return `(${quantity})`;
-            } catch {
-                return match;
+    // The parsed formula, adjusted for Excel:
+    // - & joins text (math.js reads it as bitwise and), binding tighter than comparisons, so
+    //   A1 & B1 = "ab" is (A1 & B1) = "ab"
+    // - a quoted quantity with a valid unit is a quantity, ="5 mL" * 3 -> 15 mL, except where
+    //   it is joined as text ("_48hr" stays text)
+    // - a blank cell joined as text is nothing (in arithmetic it is 0)
+    private rewriteFormula(node: any, asText = false): any {
+        const M = math as any;
+        if (node.type === "OperatorNode" && node.fn === "bitAnd") {
+            const [left, right] = node.args;
+            const join = (a: any, b: any) => new M.OperatorNode("&", "bitAnd", [a, b]);
+            if (right.type === "OperatorNode" && RELATIONAL.has(right.fn)) {
+                return this.rewriteFormula(new M.OperatorNode(right.op, right.fn, [join(left, right.args[0]), right.args[1]]));
             }
-        });
+            if (left.type === "OperatorNode" && RELATIONAL.has(left.fn)) {
+                return this.rewriteFormula(new M.OperatorNode(left.op, left.fn, [left.args[0], join(left.args[1], right)]));
+            }
+            return new M.FunctionNode(new M.SymbolNode("cc_concat"), [this.rewriteFormula(left, true), this.rewriteFormula(right, true)]);
+        }
+        if (node.type === "OperatorNode" && RELATIONAL.has(node.fn)) {
+            // a blank cell compared with something: null, so it can equal both "" and 0
+            const side = (arg: any) => (arg.type === "SymbolNode" && arg.name === "cc_blank" ? new M.ConstantNode(null) : this.rewriteFormula(arg));
+            return new M.FunctionNode(new M.SymbolNode("cc_compare"), [new M.ConstantNode(node.fn), ...node.args.map(side)]);
+        }
+        if (node.type === "ConstantNode" && typeof node.value === "string") return asText ? node : this.quantityNode(node);
+        if (node.type === "SymbolNode" && node.name === "cc_blank" && asText) return new M.ConstantNode("");
+        if (node.type === "ParenthesisNode") return new M.ParenthesisNode(this.rewriteFormula(node.content, asText));
+        const textArguments = node.type === "FunctionNode" && TEXT_ARGUMENTS.has(node.fn?.name);
+        return node.map((child: any) => this.rewriteFormula(child, textArguments));
+    }
+
+    // "5 mL" -> the quantity 5 mL, if it is one
+    private quantityNode(node: any): any {
+        const parsed = this.parseUnitValue(node.value);
+        if (!parsed.unit) return node;
+        const quantity = `${parsed.value} ${parsed.unit}`;
+        try {
+            math.unit(quantity);
+            return math.parse(`(${quantity})`);
+        } catch {
+            return node;
+        }
     }
 
     debug(message: any): void {

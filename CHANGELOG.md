@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Versions from `2.3.7-fork.1` on are a fork of [klaudyu/CalcCraft](https://github.com/klaudyu/CalcCraft) 2.3.7 by akmazian, installed under the plugin ID `calc-craft-fork`. Everything below 2.3.7 is upstream history.
 
+## [Unreleased]
+
+### Added
+- **`&` joins text**, like Excel: `=A1 & "_" & B1 & "_48hr_rep" & C1` gives `pFN214_Branaplam_48hr_rep3`. Numbers are written as Excel writes them (`0.1+0.2` → `0.3`, `1.8e5` → `180000`), `TRUE`/`FALSE` in capitals, quantities with their unit, blank cells as nothing. Arithmetic binds tighter (`"n=" & C1+1`), and `&` binds tighter than comparisons (`A1 & "x" = "abx"`). Quoted text being joined stays text, so `"48hr"` isn't read as 48 hours
+- `CONCAT` and `CONCATENATE` (blank cells skipped)
+
+### Fixed
+- **Comparing text**: `=IF(A1="pFN214", …)` gave `#VALUE!` because math.js converts text to numbers to compare it. Comparisons now follow Excel: text is compared with text ignoring case, text counts as larger than any number, and a blank cell equals both `""` and `0`
+
+### Changed
+- `&` was math.js's bitwise AND, and lowercase `concat` joined matrices; both now mean Excel's text joining
+
 ## [2.3.7-fork.3] - 2026-09-26
 
 ### Added

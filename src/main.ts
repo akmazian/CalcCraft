@@ -526,7 +526,8 @@ export default class CalcCraftPlugin extends Plugin {
 				// String number from format() - ONLY apply separators, NO precision change
 				data = this.applySeparators(data);
 			} else {
-				const unitMatch = data.match(/^(-?\d*\.?\d+(?:e[+-]?\d+)?)\s*(.+)$/);
+				// "953.13 µL" from format(); text such as "12_48hr" is left as it is
+				const unitMatch = data.match(/^(-?\d*\.?\d+(?:e[+-]?\d+)?)\s+(.+)$/);
 				if (unitMatch) {
 					const [, numberPart, unitPart] = unitMatch;
 					data = this.applySeparators(numberPart) + ' ' + unitPart;
