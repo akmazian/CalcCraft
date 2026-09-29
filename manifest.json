@@ -1,11 +1,11 @@
 {
 	"id": "calc-craft-fork",
-	"name": "CalcCraft (fork)",
+	"name": "CalcCraft Revived",
 	"version": "2.3.7-fork.3",
 	"minAppVersion": "0.15.0",
 	"description": "have formulas like in excel A1+A2, or sum()",
-	"author": "klaudyu",
-	"authorUrl": "https://www.instagram.com/klaudyul/",
+	"author": "Akmazian, adapted from klaudyu",
+	"authorUrl": "https://github.com/akmazian/CalcCraft",
 	"fundingUrl": "https://buymeacoffee.com/klaudyul",
 	"isDesktopOnly": false
 }

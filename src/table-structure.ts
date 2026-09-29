@@ -1,4 +1,4 @@
-// Part of a fork of klaudyu/CalcCraft (https://github.com/klaudyu/CalcCraft), licensed under
+// Part of CalcCraft Revived, adapted from klaudyu/CalcCraft (https://github.com/klaudyu/CalcCraft), licensed under
 // Apache 2.0. New file: keeps references pointing at the same cells when rows or columns are
 // inserted, deleted or moved, like Excel.
 //

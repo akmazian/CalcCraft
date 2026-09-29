@@ -1,4 +1,4 @@
-# TODO: gaps between CalcCraft (fork) and an Excel-like table
+# TODO: gaps between CalcCraft Revived and an Excel-like table
 
 Behaviour described as of `2.3.7-fork.2`. Difficulty is a rough guess.
 

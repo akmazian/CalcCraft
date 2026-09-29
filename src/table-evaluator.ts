@@ -1,11 +1,11 @@
-// Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
+// Modified by akmazian (2026) for CalcCraft Revived, adapted from klaudyu/CalcCraft
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: scientific notation in cells and formulas, whitespace digit grouping,
 // grouping-separator fix, uppercase references, rows numbered after the header,
 // quoted quantities (="5 mL" * 3), & joins text, format()/scientific() for units, scientific results
 // that follow their inputs, strict number parsing, percentages, #SPILL!, Excel
 // functions and error codes, molar unit M, µ/μ micro prefix, dead code removed.
-// See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
+// See the "CalcCraft Revived" section in CHANGELOG.md.
 
 import { create, all } from 'mathjs';
 

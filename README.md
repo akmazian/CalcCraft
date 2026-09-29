@@ -1,8 +1,8 @@
 
-## Fork of klaudyu/CalcCraft
+# CalcCraft Revived
 
-This is a fork of [klaudyu/CalcCraft](https://github.com/klaudyu/CalcCraft) 2.3.7, licensed under Apache 2.0 (see `LICENSE.txt`; `NOTICE` is math.js's).
-It installs as its own plugin, `calc-craft-fork` ("CalcCraft (fork)"), so Obsidian won't replace it with the upstream release when it checks for updates.
+By Akmazian, adapted from [CalcCraft](https://github.com/klaudyu/CalcCraft) 2.3.7 by klaudyu, licensed under Apache 2.0 (see `LICENSE.txt`; `NOTICE` is math.js's).
+It installs as its own plugin (ID `calc-craft-fork`), so Obsidian won't replace it with the original when it checks for updates.
 
 Changes (see [CHANGELOG.md](CHANGELOG.md) for details):
 - Scientific notation works in cells (`1.8e5`, `2e-3 M`) and in formulas (`=2*1.8e5`)

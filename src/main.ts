@@ -1,4 +1,4 @@
-// Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
+// Modified by akmazian (2026) for CalcCraft Revived, adapted from klaudyu/CalcCraft
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0. Changes:
 // - references follow inserted, deleted and moved rows/columns; formulas read from the
 //   markdown source; header-row detection; uppercase labels
@@ -8,7 +8,7 @@
 // - no colour, border or hover underline on computed cells; cells keep their width while
 //   edited; Enter in the last row leaves the table; click a cell to insert its reference
 // - dead label code and debug logging removed
-// See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
+// See the "CalcCraft Revived" section in CHANGELOG.md.
 
 import { Plugin, MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
 import { EditorView } from "@codemirror/view";

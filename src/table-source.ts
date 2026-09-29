@@ -1,4 +1,4 @@
-// Part of a fork of klaudyu/CalcCraft (https://github.com/klaudyu/CalcCraft), licensed under
+// Part of CalcCraft Revived, adapted from klaudyu/CalcCraft (https://github.com/klaudyu/CalcCraft), licensed under
 // Apache 2.0. New file: reads table cells from the markdown source.
 //
 // Formulas have to be read from the markdown source, not the rendered cell: Obsidian renders

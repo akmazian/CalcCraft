@@ -1,7 +1,7 @@
-// Modified by akmazian (2026) in a fork of klaudyu/CalcCraft
+// Modified by akmazian (2026) for CalcCraft Revived, adapted from klaudyu/CalcCraft
 // (https://github.com/klaudyu/CalcCraft), licensed under Apache 2.0.
 // Changes: indentation; removed the formula/matrix cell colour and border settings.
-// See the "Fork of klaudyu/CalcCraft" section in CHANGELOG.md.
+// See the "CalcCraft Revived" section in CHANGELOG.md.
 
 import { PluginSettingTab, Setting } from "obsidian";
 import { buyMeACoffee, paypal, revolut } from "./support";
@@ -203,8 +203,8 @@ export class CalcCraftSettingsTab extends PluginSettingTab {
 
 		const donateText = document.createElement("p");
 		donateText.appendText(
-			"If this plugin adds value for you and you would like to help support " +
-				"continued development, please use the buttons below:"
+			"CalcCraft Revived is adapted from CalcCraft by klaudyu. To support the " +
+				"original author, please use the buttons below:"
 		);
 		div.appendChild(donateText);
 
