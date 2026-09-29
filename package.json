@@ -1,6 +1,6 @@
 {
 	"name": "calccraft-revived",
-	"version": "2.3.7-fork.3",
+	"version": "2.3.7-fork.4",
 	"description": "this is an excel like plugin Obsidian (https://obsidian.md)",
 	"main": "main.js",
 	"scripts": {

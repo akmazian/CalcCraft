@@ -1,7 +1,7 @@
 {
 	"id": "calc-craft-fork",
 	"name": "CalcCraft Revived",
-	"version": "2.3.7-fork.3",
+	"version": "2.3.7-fork.4",
 	"minAppVersion": "0.15.0",
 	"description": "have formulas like in excel A1+A2, or sum()",
 	"author": "Akmazian, adapted from klaudyu",

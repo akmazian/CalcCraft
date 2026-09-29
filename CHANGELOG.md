@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Versions from `2.3.7-fork.1` on are CalcCraft Revived by Akmazian, adapted from [klaudyu/CalcCraft](https://github.com/klaudyu/CalcCraft) 2.3.7 (called "CalcCraft (fork)" until 2.3.7-fork.3), installed under the plugin ID `calc-craft-fork`. Everything below 2.3.7 is the original's history.
 
-## [Unreleased]
+## [2.3.7-fork.4] - 2026-09-28
 
 ### Changed
 - Renamed to **CalcCraft Revived**, author "Akmazian, adapted from klaudyu". The plugin ID stays `calc-craft-fork`, so installs and settings carry over
